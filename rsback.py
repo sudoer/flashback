@@ -12,7 +12,7 @@ from optparse import OptionParser
 volumeInfo = [
 #  { 'host':'bender',  'name':'root',    'src':'sheeva@bender::rootfs/',  'pw': 'eb3062a3e413cdaa377548e8742a1cd6', },  # 2G
 #  { 'host':'bender',  'name':'test',    'src':'/etc',                  'minAge':86400    },  # small
-#  { 'host':'kimono',  'name':'test',    'src':'/Users/alan/iphone',    'minAge':86400    },  # 1G
+#  { 'host':'digit',   'name':'test',    'src':'/Users/alan/iphone',    'minAge':86400    },  # 1G
    { 'host':'aspire',  'name':'etc',     'src':'root@aspire:/etc/',     'minAge':86400    },  # small
    { 'host':'aspire',  'name':'home',    'src':'root@aspire:/home/',    'minAge':86400    },  # 46G
    { 'host':'aspire',  'name':'boot',    'src':'root@aspire:/boot/',    'minAge':86400    },  # small
@@ -23,9 +23,9 @@ volumeInfo = [
    { 'host':'bender',  'name':'pub',     'src':'root@bender:/pub/',     'minAge':86400    },  # small
 #  { 'host':'bender',  'name':'copy',    'src':'root@bender:/copy/',    'minAge':86400    },  # 124G      evaluate
    { 'host':'enigma',  'name':'home',    'src':'root@enigma:/home/',    'minAge':86400*7  },  # small
-   { 'host':'kimono',  'name':'users',   'src':'root@kimono:/Users/',   'minAge':86400    },  # 95G
-#  { 'host':'kimono',  'name':'x',       'src':'root@kimono:/x/',       'minAge':86400    },  # 203G      evaluate
-#  { 'host':'mini',    'name':'users',   'src':'root@mini:/Users/',     'minAge':86400    },  # 46G       clean up and add
+   { 'host':'digit',   'name':'users',   'src':'root@digit:/Users/',    'minAge':86400    },  # 95G
+#  { 'host':'digit',   'name':'x',       'src':'root@digit:/x/',        'minAge':86400    },  # 203G      evaluate
+   { 'host':'mini',    'name':'users',   'src':'root@mini:/Users/',     'minAge':86400    },  # 2G
    { 'host':'sheeva',  'name':'root',    'src':'/',                     'minAge':86400*7  },  # 2G
    { 'host':'sheeva',  'name':'boot',    'src':'/boot/',                'minAge':86400*7  },  # small
    { 'host':'xps',     'name':'home',    'src':'root@xps:/home/',       'minAge':86400    },  # 35G
