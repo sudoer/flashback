@@ -10,27 +10,27 @@ import sys
 from optparse import OptionParser
 
 volumeInfo = [
-#  { 'host':'bender',  'name':'root',    'src':'sheeva@bender::rootfs/',  'pw': 'eb3062a3e413cdaa377548e8742a1cd6', },  # 2G
-#  { 'host':'bender',  'name':'test',    'src':'/etc',                  'minAge':86400    },  # small
-#  { 'host':'digit',   'name':'test',    'src':'/Users/alan/iphone',    'minAge':86400    },  # 1G
-   { 'host':'aspire',  'name':'etc',     'src':'root@aspire:/etc/',     'minAge':86400    },  # small
-   { 'host':'aspire',  'name':'home',    'src':'root@aspire:/home/',    'minAge':86400    },  # 46G
-   { 'host':'aspire',  'name':'boot',    'src':'root@aspire:/boot/',    'minAge':86400    },  # small
-   { 'host':'bender',  'name':'root',    'src':'root@bender:/',         'minAge':86400    },  # small
-   { 'host':'bender',  'name':'boot',    'src':'root@bender:/boot/',    'minAge':86400    },  # small
-   { 'host':'bender',  'name':'home',    'src':'root@bender:/home/',    'minAge':86400    },  # 13G
-   { 'host':'bender',  'name':'backup',  'src':'root@bender:/backup/',  'minAge':86400    },  # 44G
-   { 'host':'bender',  'name':'pub',     'src':'root@bender:/pub/',     'minAge':86400    },  # small
-#  { 'host':'bender',  'name':'copy',    'src':'root@bender:/copy/',    'minAge':86400    },  # 124G      evaluate
-   { 'host':'enigma',  'name':'home',    'src':'root@enigma:/home/',    'minAge':86400*7  },  # small
-   { 'host':'digit',   'name':'users',   'src':'root@digit:/Users/',    'minAge':86400    },  # 95G
-#  { 'host':'digit',   'name':'x',       'src':'root@digit:/x/',        'minAge':86400    },  # 203G      evaluate
-   { 'host':'mini',    'name':'users',   'src':'root@mini:/Users/',     'minAge':86400    },  # 2G
-   { 'host':'sheeva',  'name':'root',    'src':'/',                     'minAge':86400*7  },  # 2G
-   { 'host':'sheeva',  'name':'boot',    'src':'/boot/',                'minAge':86400*7  },  # small
-   { 'host':'xps',     'name':'home',    'src':'root@xps:/home/',       'minAge':86400    },  # 35G
-   { 'host':'xps',     'name':'etc',     'src':'root@xps:/etc/',        'minAge':86400    },  # small
-   { 'host':'xps',     'name':'boot',    'src':'root@xps:/boot/',       'minAge':86400    },  # small
+#  { 'host':'bender',  'name':'root',    'src':'sheeva@bender::rootfs/',  'pw': 'eb306223e413cdaa377548e8742a1cd6', },  # 2G
+#  { 'host':'bender',  'name':'test',    'src':'/etc',                  'minAge':86400*2,  "disabled":True   },  # small
+#  { 'host':'digit',   'name':'test',    'src':'/Users/alan/iphone',    'minAge':86400*2,  "disabled":True   },  # 1G
+   { 'host':'aspire',  'name':'etc',     'src':'root@aspire:/etc/',     'minAge':86400*2,  "disabled":False  },  # small
+   { 'host':'aspire',  'name':'home',    'src':'root@aspire:/home/',    'minAge':86400*2,  "disabled":False  },  # 46G
+   { 'host':'aspire',  'name':'boot',    'src':'root@aspire:/boot/',    'minAge':86400*2,  "disabled":False  },  # small
+   { 'host':'bender',  'name':'root',    'src':'root@bender:/',         'minAge':86400*2,  "disabled":False  },  # small
+   { 'host':'bender',  'name':'boot',    'src':'root@bender:/boot/',    'minAge':86400*2,  "disabled":False  },  # small
+   { 'host':'bender',  'name':'home',    'src':'root@bender:/home/',    'minAge':86400*2,  "disabled":False  },  # 13G
+   { 'host':'bender',  'name':'backup',  'src':'root@bender:/backup/',  'minAge':86400*2,  "disabled":False  },  # 44G
+   { 'host':'bender',  'name':'pub',     'src':'root@bender:/pub/',     'minAge':86400*2,  "disabled":False  },  # small
+#  { 'host':'bender',  'name':'copy',    'src':'root@bender:/copy/',    'minAge':86400*2,  "disabled":True   },  # 124G      evaluate
+   { 'host':'enigma',  'name':'home',    'src':'root@enigma:/home/',    'minAge':86400*7,  "disabled":False  },  # small
+   { 'host':'digit',   'name':'users',   'src':'root@digit:/Users/',    'minAge':86400*2,  "disabled":False  },  # 95G
+#  { 'host':'digit',   'name':'x',       'src':'root@digit:/x/',        'minAge':86400*2,  "disabled":True   },  # 203G      evaluate
+   { 'host':'mini',    'name':'users',   'src':'root@mini:/Users/',     'minAge':86400*2,  "disabled":False  },  # 2G
+   { 'host':'sheeva',  'name':'root',    'src':'/',                     'minAge':86400*7,  "disabled":False  },  # 2G
+   { 'host':'sheeva',  'name':'boot',    'src':'/boot/',                'minAge':86400*7,  "disabled":False  },  # small
+   { 'host':'xps',     'name':'home',    'src':'root@xps:/home/',       'minAge':86400*2,  "disabled":False  },  # 35G
+   { 'host':'xps',     'name':'etc',     'src':'root@xps:/etc/',        'minAge':86400*2,  "disabled":False  },  # small
+   { 'host':'xps',     'name':'boot',    'src':'root@xps:/boot/',       'minAge':86400*2,  "disabled":False  },  # small
 # XPS /dev/mapper/vg1-home         128G     35G     87G   29%  /home
 # XPS /dev/mapper/vg1-vm           109G     62G     41G   61%  /mnt/vm
 # XPS /dev/mapper/vg1-public        15G     11G    3.4G   77%  /mnt/public
@@ -115,38 +115,58 @@ def do_backup(v):
    # rsync_options = -v
    # rsync_options = -E on a Mac means copy extended attributes (necessary), on Linux it means preserve exe status (innocuous)
    # exclude_file = /etc/rsback/global.exclude
-   f1.write('''
-[global]
-rsync_cmd = /usr/bin/rsync
-cp_cmd = /bin/cp
-mv_cmd = /bin/mv
-rm_cmd = /bin/rm
-mkdir_cmd = /bin/mkdir
-lock_dir = /var/lock
-rsync_options = -al -E --delete --delete-excluded --stats --numeric-ids --one-file-system '''+pwopt+'''
-if_locked_retry = 3 10m
-if_error_continue = yes
-ignore_rsync_errors = 10 12 24
-use_link_dest = yes
-''')
+   f1.write('[global]\n')
+   f1.write('rsync_cmd = /usr/bin/rsync\n')
+   f1.write('cp_cmd = /bin/cp\n')
+   f1.write('mv_cmd = /bin/mv\n')
+   f1.write('rm_cmd = /bin/rm\n')
+   f1.write('mkdir_cmd = /bin/mkdir\n')
+   f1.write('lock_dir = /var/lock\n')
+   f1.write('rsync_options = -al -E --delete --delete-excluded --stats --numeric-ids --one-file-system '+pwopt+'\n')
+   f1.write('if_locked_retry = 3 10m\n')
+   f1.write('if_error_continue = yes\n')
 
-   f1.write('tasks = %s-%s-daily %s-%s-weekly' % ( v['host'], v['name'], v['host'], v['name'] ) )
+   #   0      Success
+   #   1      Syntax or usage error
+   #   2      Protocol incompatibility
+   #   3      Errors selecting input/output files, dirs
+   #   4      Requested action not supported
+   #   5      Error starting client-server protocol
+   #   6      Daemon unable to append to log-file
+   #   10     Error in socket I/O
+   #   11     Error in file I/O
+   #   12     Error in rsync protocol data stream
+   #   13     Errors with program diagnostics
+   #   14     Error in IPC code
+   #   20     Received SIGUSR1 or SIGINT
+   #   21     Some error returned by waitpid()
+   #   22     Error allocating core memory buffers
+   #   23     Partial transfer due to error
+   #   24     Partial transfer due to vanished source files
+   #   25     The --max-delete limit stopped deletions
+   #   30     Timeout in data send/receive
+   #   35     Timeout waiting for daemon connection
+   f1.write('ignore_rsync_errors = 10 12 24\n')
+   f1.write('use_link_dest = yes\n')
+   f1.write('\n')
 
-   f1.write('''
-[%s-%s-daily]
-source = %s
-destination = %s/%s/%s/
-rotate = daily 9
-mode = rsync
-''' % ( v['host'], v['name'], v['src'], top, v['host'], v['name'] ) )
+   f1.write('tasks = %s-%s-daily %s-%s-weekly\n' % ( v['host'], v['name'], v['host'], v['name'] ) )
+   f1.write('\n')
+   f1.write('[%s-%s-daily]\n' % (v['host'], v['name']) )
+   f1.write('source = %s\n' % (v['src']) )
+   f1.write('destination = %s/%s/%s\n' % (top, v['host'], v['name']) )
+   f1.write('rotate = daily 9\n')
+   f1.write('mode = rsync\n')
+   f1.write('exclude_file = %s/%s/%s/excludes\n' % (top, v['host'], v['name']) )
+   f1.write('\n')
 
-   f1.write('''
-[%s-%s-weekly]
-source = %s/%s/%s/daily.1/
-destination = %s/%s/%s/
-rotate = weekly 9
-mode = link
-''' % ( v['host'], v['name'], top, v['host'], v['name'], top, v['host'], v['name'] ) )
+   f1.write('[%s-%s-weekly]\n' % (v['host'], v['name']) )
+   f1.write('source = %s/%s/%s/daily.1/\n' % (top, v['host'], v['name']) )
+   f1.write('destination = %s/%s/%s/\n' % (top, v['host'], v['name']) )
+   f1.write('rotate = weekly 9\n' % () )
+   f1.write('mode = link\n' % () )
+   f1.write('\n')
+
    f1.close()
 
    rc = shell_do(['./rsback-0.6.4.pl', '-v', '-c', cfgfilename, '%s-%s-daily' % (v['host'], v['name']) ])
@@ -228,13 +248,15 @@ def main():
 
    # GO THROUGH THE LIST IN ORDER, DETERMINE THEIR AGES
 
+   log_info('volumes:')
    now = datetime.datetime.now()
    for volume in sortedVolumes:
       lastBackup = datetime.datetime.strptime(volume['lastBackup'],'%Y-%m-%d %H:%M:%S')
       ageDelta = now - lastBackup
       currentAge = ageDelta.seconds + (ageDelta.days * 86400)
       volume['currentAge'] = currentAge
-      log_info('   '+volume['key']+' -> '+('DISABLED' if volume['disabled'] else ( volume['lastBackup']+' = '+ ('%d'%currentAge)) ) )
+      log_info('   '+volume['key']+' -> '+volume['lastBackup']+' = '+('%d'%currentAge)+('  DISABLED' if volume['disabled'] else '') )
+   log_info('')
 
    # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
 
