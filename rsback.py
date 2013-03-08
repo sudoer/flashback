@@ -8,29 +8,30 @@ import glob
 import operator
 import sys
 from optparse import OptionParser
+import time
 
 volumeInfo = [
 #  { 'host':'bender',  'name':'root',    'src':'sheeva@bender::rootfs/',  'pw': 'eb306223e413cdaa377548e8742a1cd6', },  # 2G
 #  { 'host':'bender',  'name':'test',    'src':'/etc',                  'minAge':86400*2,  "disabled":True   },  # small
 #  { 'host':'digit',   'name':'test',    'src':'/Users/alan/iphone',    'minAge':86400*2,  "disabled":True   },  # 1G
-   { 'host':'aspire',  'name':'etc',     'src':'root@aspire:/etc/',     'minAge':86400*2,  "disabled":False  },  # small
-   { 'host':'aspire',  'name':'home',    'src':'root@aspire:/home/',    'minAge':86400*2,  "disabled":False  },  # 46G
-   { 'host':'aspire',  'name':'boot',    'src':'root@aspire:/boot/',    'minAge':86400*2,  "disabled":False  },  # small
-   { 'host':'bender',  'name':'root',    'src':'root@bender:/',         'minAge':86400*2,  "disabled":False  },  # small
-   { 'host':'bender',  'name':'boot',    'src':'root@bender:/boot/',    'minAge':86400*2,  "disabled":False  },  # small
-   { 'host':'bender',  'name':'home',    'src':'root@bender:/home/',    'minAge':86400*2,  "disabled":False  },  # 13G
+   { 'host':'aspire',  'name':'etc',     'src':'root@aspire:/etc/',     'minAge':86400*1,  "disabled":False  },  # small
+   { 'host':'aspire',  'name':'home',    'src':'root@aspire:/home/',    'minAge':86400*1,  "disabled":False  },  # 46G
+   { 'host':'aspire',  'name':'boot',    'src':'root@aspire:/boot/',    'minAge':86400*1,  "disabled":False  },  # small
+   { 'host':'bender',  'name':'root',    'src':'root@bender:/',         'minAge':86400*1,  "disabled":False  },  # small
+   { 'host':'bender',  'name':'boot',    'src':'root@bender:/boot/',    'minAge':86400*1,  "disabled":False  },  # small
+   { 'host':'bender',  'name':'home',    'src':'root@bender:/home/',    'minAge':86400*1,  "disabled":False  },  # 13G
    { 'host':'bender',  'name':'backup',  'src':'root@bender:/backup/',  'minAge':86400*2,  "disabled":False  },  # 44G
-   { 'host':'bender',  'name':'pub',     'src':'root@bender:/pub/',     'minAge':86400*2,  "disabled":False  },  # small
+   { 'host':'bender',  'name':'pub',     'src':'root@bender:/pub/',     'minAge':86400*1,  "disabled":False  },  # small
 #  { 'host':'bender',  'name':'copy',    'src':'root@bender:/copy/',    'minAge':86400*2,  "disabled":True   },  # 124G      evaluate
    { 'host':'enigma',  'name':'home',    'src':'root@enigma:/home/',    'minAge':86400*7,  "disabled":False  },  # small
-   { 'host':'digit',   'name':'users',   'src':'root@digit:/Users/',    'minAge':86400*2,  "disabled":False  },  # 95G
+   { 'host':'digit',   'name':'users',   'src':'root@digit:/Users/',    'minAge':86400*1,  "disabled":False  },  # 95G
 #  { 'host':'digit',   'name':'x',       'src':'root@digit:/x/',        'minAge':86400*2,  "disabled":True   },  # 203G      evaluate
    { 'host':'mini',    'name':'users',   'src':'root@mini:/Users/',     'minAge':86400*2,  "disabled":False  },  # 2G
    { 'host':'sheeva',  'name':'root',    'src':'/',                     'minAge':86400*7,  "disabled":False  },  # 2G
    { 'host':'sheeva',  'name':'boot',    'src':'/boot/',                'minAge':86400*7,  "disabled":False  },  # small
-   { 'host':'xps',     'name':'home',    'src':'root@xps:/home/',       'minAge':86400*2,  "disabled":False  },  # 35G
-   { 'host':'xps',     'name':'etc',     'src':'root@xps:/etc/',        'minAge':86400*2,  "disabled":False  },  # small
-   { 'host':'xps',     'name':'boot',    'src':'root@xps:/boot/',       'minAge':86400*2,  "disabled":False  },  # small
+   { 'host':'xps',     'name':'home',    'src':'root@xps:/home/',       'minAge':86400*3,  "disabled":False  },  # 35G
+   { 'host':'xps',     'name':'etc',     'src':'root@xps:/etc/',        'minAge':86400*3,  "disabled":False  },  # small
+   { 'host':'xps',     'name':'boot',    'src':'root@xps:/boot/',       'minAge':86400*3,  "disabled":False  },  # small
 # XPS /dev/mapper/vg1-home         128G     35G     87G   29%  /home
 # XPS /dev/mapper/vg1-vm           109G     62G     41G   61%  /mnt/vm
 # XPS /dev/mapper/vg1-public        15G     11G    3.4G   77%  /mnt/public
@@ -176,6 +177,61 @@ def do_backup(v):
 
 #-----------------------------------------------------------
 
+def do_single_pass():
+
+   # LOOK AT RECENT BACKUPS
+
+   cmd = ['grep', '^1\\b']
+   cmd.extend(glob.glob(top+'/*/*/history.daily'))
+   rc, stdout, stderr = shell_capture(cmd)
+   for line in stdout.split('\n'):
+      if line == '' : continue
+      junk1, junk2, right = line.partition(top)
+      pathpieces = right.split('/')
+      host = pathpieces[1]
+      name = pathpieces[2]
+      junk1, junk2, lastBackup = right.partition('\t')
+      #log_debug('LINE <<'+line+'>>')
+      # find the volumeInfo line that contains key='host-name'
+      try:
+         idx = map(operator.itemgetter('key'), volumeInfo).index(host+'-'+name)
+         log_debug('host='+host+', name='+name+', lastBackup='+lastBackup+', '+host+'-'+name+' is in slot %d'%idx)
+         volumeInfo[idx]['lastBackup'] = lastBackup
+      except ValueError:
+         log_debug('host='+host+', name='+name+', lastBackup='+lastBackup+', '+host+'-'+name+' is not in the list of volumes')
+         pass
+
+   # SORT RECENT BACKUPS BY AGE
+
+   sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('lastBackup'))
+
+   # GO THROUGH THE LIST IN ORDER, DETERMINE THEIR AGES
+
+   log_info('volumes:')
+   now = datetime.datetime.now()
+   for volume in sortedVolumes:
+      lastBackup = datetime.datetime.strptime(volume['lastBackup'],'%Y-%m-%d %H:%M:%S')
+      ageDelta = now - lastBackup
+      currentAge = ageDelta.seconds + (ageDelta.days * 86400)
+      volume['currentAge'] = currentAge
+      status='READY'
+      if volume['currentAge'] < volume['minAge'] : status = 'CURRENT'
+      if volume['disabled'] : status='DISABLED'
+      log_info('   '+volume['key']+' -> '+volume['lastBackup']
+          +' = '+('%d'%currentAge)+'/'+('%d'%volume['minAge'])+'   '+status)
+   log_info('')
+
+   # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
+
+   log_info('start of single pass')
+   for volume in sortedVolumes:
+      if volume['currentAge'] < volume['minAge'] : continue
+      if volume['disabled'] : continue
+      do_backup(volume)
+   log_info('end of single pass')
+
+#-----------------------------------------------------------
+
 # START
 def main():
 
@@ -220,55 +276,16 @@ def main():
       if 'minAge' not in volume : volume['minAge'] = defaultMinAge
       if 'disabled' not in volume : volume['disabled'] = False
 
-   # LOOK AT RECENT BACKUPS
-
-   cmd = ['grep', '^1\\b']
-   cmd.extend(glob.glob(top+'/*/*/history.daily'))
-   rc, stdout, stderr = shell_capture(cmd)
-   for line in stdout.split('\n'):
-      if line == '' : continue
-      junk1, junk2, right = line.partition(top)
-      pathpieces = right.split('/')
-      host = pathpieces[1]
-      name = pathpieces[2]
-      junk1, junk2, lastBackup = right.partition('\t')
-      #log_debug('LINE <<'+line+'>>')
-      # find the volumeInfo line that contains key='host-name'
-      try:
-         idx = map(operator.itemgetter('key'), volumeInfo).index(host+'-'+name)
-         log_debug('host='+host+', name='+name+', lastBackup='+lastBackup+', '+host+'-'+name+' is in slot %d'%idx)
-         volumeInfo[idx]['lastBackup'] = lastBackup
-      except ValueError:
-         log_debug('host='+host+', name='+name+', lastBackup='+lastBackup+', '+host+'-'+name+' is not in the list of volumes')
-         pass
-
-   # SORT RECENT BACKUPS BY AGE
-
-   sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('lastBackup'))
-
-   # GO THROUGH THE LIST IN ORDER, DETERMINE THEIR AGES
-
-   log_info('volumes:')
-   now = datetime.datetime.now()
-   for volume in sortedVolumes:
-      lastBackup = datetime.datetime.strptime(volume['lastBackup'],'%Y-%m-%d %H:%M:%S')
-      ageDelta = now - lastBackup
-      currentAge = ageDelta.seconds + (ageDelta.days * 86400)
-      volume['currentAge'] = currentAge
-      log_info('   '+volume['key']+' -> '+volume['lastBackup']+' = '+('%d'%currentAge)+('  DISABLED' if volume['disabled'] else '') )
-   log_info('')
-
-   # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
-
-   for volume in sortedVolumes:
-      if volume['currentAge'] < volume['minAge'] : continue
-      if volume['disabled'] : continue
-      do_backup(volume)
-
-   log_info('finished')
+   try:
+      while True:
+         do_single_pass()
+         time.sleep(10*60)
+   except:
+      log_info('exception encountered')
 
    # CLEAN UP
 
+   log_info('cleaning up')
    os.unlink(pidfile)
 
 #-----------------------------------------------------------
