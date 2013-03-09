@@ -20,13 +20,13 @@ volumeInfo = [
    { 'host':'bender',  'name':'root',    'src':'root@bender:/',         'minAge':86400*1,  "disabled":False  },  # small
    { 'host':'bender',  'name':'boot',    'src':'root@bender:/boot/',    'minAge':86400*1,  "disabled":False  },  # small
    { 'host':'bender',  'name':'home',    'src':'root@bender:/home/',    'minAge':86400*1,  "disabled":False  },  # 13G
-   { 'host':'bender',  'name':'backup',  'src':'root@bender:/backup/',  'minAge':86400*2,  "disabled":False  },  # 44G
+   { 'host':'bender',  'name':'backup',  'src':'root@bender:/backup/',  'minAge':86400*1,  "disabled":False  },  # 44G
    { 'host':'bender',  'name':'pub',     'src':'root@bender:/pub/',     'minAge':86400*1,  "disabled":False  },  # small
 #  { 'host':'bender',  'name':'copy',    'src':'root@bender:/copy/',    'minAge':86400*2,  "disabled":True   },  # 124G      evaluate
    { 'host':'enigma',  'name':'home',    'src':'root@enigma:/home/',    'minAge':86400*7,  "disabled":False  },  # small
    { 'host':'digit',   'name':'users',   'src':'root@digit:/Users/',    'minAge':86400*1,  "disabled":False  },  # 95G
 #  { 'host':'digit',   'name':'x',       'src':'root@digit:/x/',        'minAge':86400*2,  "disabled":True   },  # 203G      evaluate
-   { 'host':'mini',    'name':'users',   'src':'root@mini:/Users/',     'minAge':86400*2,  "disabled":False  },  # 2G
+   { 'host':'mini',    'name':'users',   'src':'root@mini:/Users/',     'minAge':86400*1,  "disabled":False  },  # 2G
    { 'host':'sheeva',  'name':'root',    'src':'/',                     'minAge':86400*7,  "disabled":False  },  # 2G
    { 'host':'sheeva',  'name':'boot',    'src':'/boot/',                'minAge':86400*7,  "disabled":False  },  # small
    { 'host':'xps',     'name':'home',    'src':'root@xps:/home/',       'minAge':86400*3,  "disabled":False  },  # 35G
@@ -97,6 +97,15 @@ def shell_do(cmdargs):
    rc = subprocess.call(cmdargs, stdout=g_logFD, stderr=g_logFD)
    log_debug("shell_do rc = "+("%d"%rc))
    return rc
+
+#-----------------------------------------------------------
+
+def sec2dhms(s):
+   days = s // 86400  ; s = s - (days * 86400)
+   hours = s // 3600  ; s = s - (hours * 3600)
+   mins = s // 60     ; s = s - (mins * 60)
+   secs = s
+   return (days, hours, mins, secs)
 
 #-----------------------------------------------------------
 
@@ -214,8 +223,10 @@ def do_single_pass():
       ageDelta = now - lastBackup
       currentAge = ageDelta.seconds + (ageDelta.days * 86400)
       volume['currentAge'] = currentAge
+      (d,h,m,s) = sec2dhms( volume['minAge'] - volume['currentAge'] )
       status='READY'
-      if volume['currentAge'] < volume['minAge'] : status = 'CURRENT'
+      if volume['currentAge'] < volume['minAge'] :
+         status = 'NEXT RUN %dd+%d:%02d:%02d' % (d,h,m,s)
       if volume['disabled'] : status='DISABLED'
       log_info('   '+volume['key']+' -> '+volume['lastBackup']
           +' = '+('%d'%currentAge)+'/'+('%d'%volume['minAge'])+'   '+status)
