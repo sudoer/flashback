@@ -43,6 +43,7 @@ volumeInfo = [
 ]
 
 top = '/rsback'
+maxAge = 10000000
 defaultMinAge = 86400
 options = ()
 
@@ -210,26 +211,38 @@ def do_single_pass():
          log_debug('host='+host+', name='+name+', lastBackup='+lastBackup+', '+host+'-'+name+' is not in the list of volumes')
          pass
 
-   # SORT RECENT BACKUPS BY AGE
+   # GO THROUGH THE LIST IN ORDER, DETERMINE THEIR AGES AND NEXT BACKUP TIME
 
-   sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('lastBackup'))
-
-   # GO THROUGH THE LIST IN ORDER, DETERMINE THEIR AGES
-
-   log_info('volumes:')
    now = datetime.datetime.now()
-   for volume in sortedVolumes:
+   for volume in volumeInfo:
       lastBackup = datetime.datetime.strptime(volume['lastBackup'],'%Y-%m-%d %H:%M:%S')
       ageDelta = now - lastBackup
       currentAge = ageDelta.seconds + (ageDelta.days * 86400)
       volume['currentAge'] = currentAge
-      (d,h,m,s) = sec2dhms( volume['minAge'] - volume['currentAge'] )
+      nextBackup = volume['minAge'] - volume['currentAge']
+      if volume['disabled'] : nextBackup = maxAge
+      volume['nextBackup'] = nextBackup
+
+   sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('nextBackup'))
+
+   # SHOW THE SORTED LIST IN THE LOG
+
+   maxKeyWidth = 0
+   for volume in volumeInfo:
+      maxKeyWidth = max(maxKeyWidth,len(volume['key']))
+
+   log_info('volumes:')
+   now = datetime.datetime.now()
+   for volume in sortedVolumes:
+      (d,h,m,s) = sec2dhms( volume['nextBackup'] )
       status='READY'
       if volume['currentAge'] < volume['minAge'] :
          status = 'NEXT RUN %dd+%d:%02d:%02d' % (d,h,m,s)
       if volume['disabled'] : status='DISABLED'
-      log_info('   '+volume['key']+' -> '+volume['lastBackup']
-          +' = '+('%d'%currentAge)+'/'+('%d'%volume['minAge'])+'   '+status)
+      log_info('   '+volume['key']+(' '*(maxKeyWidth-len(volume['key'])))
+          +' -> '+volume['lastBackup']
+          +' = '+('%d'%volume['currentAge'])+'/'+('%d'%volume['minAge'])
+          +'   '+status)
    log_info('')
 
    # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
@@ -287,12 +300,9 @@ def main():
       if 'minAge' not in volume : volume['minAge'] = defaultMinAge
       if 'disabled' not in volume : volume['disabled'] = False
 
-   try:
-      while True:
-         do_single_pass()
-         time.sleep(10*60)
-   except:
-      log_info('exception encountered')
+   while True:
+      do_single_pass()
+      time.sleep(10*60)
 
    # CLEAN UP
 
