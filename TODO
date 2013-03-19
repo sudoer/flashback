@@ -1,4 +1,6 @@
 
+NOW
+~~~
 snazzy name
 push to github
 config files (global, per machine, per share)
@@ -7,4 +9,8 @@ rotate backups myself
 store timestamps for each backup
 plug-in to allow LED blinking
 store status in a file
+
+LATER
+~~~~~
+audit runs after backup, compares "new" and "large" files to yesterday's large files, compares md5, creates hard links
 
