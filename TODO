@@ -1,14 +1,14 @@
 
 NOW
 ~~~
-snazzy name
-push to github
-config files (global, per machine, per share)
-use rsync instead of rsback
-rotate backups myself
-store timestamps for each backup
-plug-in to allow LED blinking
-store status in a file
+[ ] snazzy name
+[ ] push to github
+[ ] config files (global, per machine, per share)
+[x] use rsync instead of rsback
+[x] rotate backups myself
+[ ] store timestamps for each backup
+[ ] plug-in to allow LED blinking
+[ ] store status in a file
 
 LATER
 ~~~~~

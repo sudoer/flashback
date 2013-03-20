@@ -29,7 +29,7 @@ volumeInfo = [
 #   { 'host':'digit',   'name':'x',       'src':'root@digit:/x/',        'minAge':86400*2,  },  # 203G      evaluate
     { 'host':'mini',    'name':'users',   'src':'root@mini:/Users/',     'minAge':86400*1,  },  # 2G
     { 'host':'sheeva',  'name':'root',    'src':'/',                     'minAge':86400*7,  },  # 2G
-    { 'host':'sheeva',  'name':'boot',    'src':'/boot/',                'minAge':400,      },  # small
+    { 'host':'sheeva',  'name':'boot',    'src':'/boot/',                'minAge':86400*7,  },  # small
     { 'host':'xps',     'name':'home',    'src':'root@xps:/home/',       'minAge':86400*3,  },  # 35G
     { 'host':'xps',     'name':'etc',     'src':'root@xps:/etc/',        'minAge':86400*3,  },  # small
     { 'host':'xps',     'name':'boot',    'src':'root@xps:/boot/',       'minAge':86400*3,  },  # small
@@ -116,8 +116,7 @@ def sec2dhms(s):
 
 def do_backup(v):
 
-    rc = shell_do([
-        '/usr/bin/rsync',
+    args = [
         '-al',
         '-E',
         '--delete',
@@ -127,9 +126,19 @@ def do_backup(v):
         '--one-file-system',
 #       '-v',
         '--link-dest='+top+'/'+v['host']+'/'+v['name']+'/'+daily+'.1',
-        v['src'],
-        top+'/'+v['host']+'/'+v['name']+'/'+daily+'.0'
-    ])
+    ]
+
+    src = v['src']
+    dest = top+'/'+v['host']+'/'+v['name']+'/'+daily+'.0'
+
+    # optional - "excludes" file
+    excludes = top+'/'+v['host']+'/'+v['name']+'/excludes'
+    log_debug('testing for ['+excludes+']')
+    if os.path.isfile(excludes):
+        log_debug('"excludes" file found, adding argument')
+        args.append('--exclude-from='+excludes)
+
+    rc = shell_do(['/usr/bin/rsync'] + args + [src, dest])
 
     #   0      Success
     #   1      Syntax or usage error
@@ -151,14 +160,17 @@ def do_backup(v):
     #   25     The --max-delete limit stopped deletions
     #   30     Timeout in data send/receive
     #   35     Timeout waiting for daemon connection
-    complete = True if rc in (0,10,12,24) else False
-    log_debug('rc = %d, '%rc + 'complete' if complete else 'incomplete')
+    complete = True if rc in (0, 24) else False
+    log_debug('rc = %d, '%rc)
 
     prefix = top+'/'+v['host']+'/'+v['name']+'/'+daily+'.'
     if os.path.isdir(prefix+'0') == False:
+        log_debug(prefix+'0 directory was not found, marking incomplete')
         complete = False
 
+
     if complete:
+        log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
         # "touch" the timestamp
         os.utime(prefix+'0',None)
         # rotate the numbered backups
@@ -169,6 +181,11 @@ def do_backup(v):
             if os.path.isdir(prefix+str(i-1)):
                 log_debug('renaming '+str(i-1)+' -> '+str(i))
                 os.rename(prefix+str(i-1),prefix+str(i))
+    else: # not complete
+        log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
+        if os.path.isdir(prefix+'0'):
+            log_debug('removing 0')
+            shutil.rmtree(prefix+'0')
 
     log_debug('done')
 
@@ -188,7 +205,7 @@ def do_single_pass():
         # Get the creation time of the daily.1 directory.
         # Note: ctime() does not refer to creation time on *nix systems,
         # but rather the last time the inode data changed.
-        lastBackup = time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(os.path.getctime(recentBackup)))
+        lastBackup = time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(os.path.getmtime(recentBackup)))
         # find the volumeInfo line that contains key='host-name'
         try:
             idx = map(operator.itemgetter('key'), volumeInfo).index(host+'-'+name)
@@ -289,7 +306,7 @@ def main():
 
     while True:
         do_single_pass()
-        time.sleep(2*60)
+        time.sleep(10*60)
 
     # CLEAN UP
 
