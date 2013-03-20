@@ -43,7 +43,7 @@ volumeInfo = [
 # d505.pl:$Conf{RsyncShareName} = ['/home','/root','/etc','/var/log'];
 ]
 
-top = '/rsback'
+top = '/greenback'
 maxAge = 10000000
 defaultMinAge = 86400
 keepCount = 9
@@ -64,7 +64,7 @@ def log_init():
     #  if not os.path.exists(logdir):
     #     os.makedirs(logdir)
     #  logfile = logdir+"/garage.log"
-    #  logfile = 'rsback.log'
+    #  logfile = 'greenback.log'
     logfile = '/dev/stdout'
     g_logFD = open(logfile,'a')
 
@@ -278,7 +278,7 @@ def main():
 
     # LOOK FOR PID FILE, EXIT IF FOUND
 
-    pidfile='/var/run/rsback-py.pid'
+    pidfile='/var/run/greenback.pid'
     try:
         with open(pidfile) as f:
             log_info("pidfile '%s' found... better look for a running process" % pidfile)
