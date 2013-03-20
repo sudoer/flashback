@@ -10,49 +10,20 @@ import sys
 from optparse import OptionParser
 import time
 import shutil
-
-volumeInfo = [
-#   { 'host':'bender',  'name':'root',    'src':'sheeva@bender::rootfs/',  'pw': 'eb306223e413cdaa377548e8742a1cd6', },  # 2G
-#   { 'host':'bender',  'name':'test',    'src':'/etc',                  'minAge':86400*2,  },  # small
-#   { 'host':'digit',   'name':'test',    'src':'/Users/alan/iphone',    'minAge':86400*2,  },  # 1G
-    { 'host':'aspire',  'name':'etc',     'src':'root@aspire:/etc/',     'minAge':86400*1,  },  # small
-    { 'host':'aspire',  'name':'home',    'src':'root@aspire:/home/',    'minAge':86400*1,  },  # 46G
-    { 'host':'aspire',  'name':'boot',    'src':'root@aspire:/boot/',    'minAge':86400*1,  },  # small
-    { 'host':'bender',  'name':'root',    'src':'root@bender:/',         'minAge':86400*1,  },  # small
-    { 'host':'bender',  'name':'boot',    'src':'root@bender:/boot/',    'minAge':86400*1,  },  # small
-    { 'host':'bender',  'name':'home',    'src':'root@bender:/home/',    'minAge':86400*1,  },  # 13G
-    { 'host':'bender',  'name':'backup',  'src':'root@bender:/backup/',  'minAge':86400*1,  },  # 44G
-    { 'host':'bender',  'name':'pub',     'src':'root@bender:/pub/',     'minAge':86400*1,  },  # small
-#   { 'host':'bender',  'name':'copy',    'src':'root@bender:/copy/',    'minAge':86400*2,  },  # 124G      evaluate
-    { 'host':'enigma',  'name':'home',    'src':'root@enigma:/home/',    'minAge':86400*7,  },  # small
-    { 'host':'digit',   'name':'users',   'src':'root@digit:/Users/',    'minAge':86400*1,  },  # 95G
-#   { 'host':'digit',   'name':'x',       'src':'root@digit:/x/',        'minAge':86400*2,  },  # 203G      evaluate
-    { 'host':'mini',    'name':'users',   'src':'root@mini:/Users/',     'minAge':86400*1,  },  # 2G
-    { 'host':'sheeva',  'name':'root',    'src':'/',                     'minAge':86400*7,  },  # 2G
-    { 'host':'sheeva',  'name':'boot',    'src':'/boot/',                'minAge':86400*7,  },  # small
-    { 'host':'xps',     'name':'home',    'src':'root@xps:/home/',       'minAge':86400*3,  },  # 35G
-    { 'host':'xps',     'name':'etc',     'src':'root@xps:/etc/',        'minAge':86400*3,  },  # small
-    { 'host':'xps',     'name':'boot',    'src':'root@xps:/boot/',       'minAge':86400*3,  },  # small
-# XPS /dev/mapper/vg1-home         128G     35G     87G   29%  /home
-# XPS /dev/mapper/vg1-vm           109G     62G     41G   61%  /mnt/vm
-# XPS /dev/mapper/vg1-public        15G     11G    3.4G   77%  /mnt/public
-# XPS /dev/mapper/vg1-tekelec       30G     24G    4.1G   86%  /mnt/tekelec
-# XPS /dev/mapper/vg1-itunes        16G    6.7G    9.4G   42%  /mnt/itunes
-# XPS /dev/mapper/vg1-music         50G     47G    3.0G   94%  /mnt/music
-# XPS /dev/mapper/vg1-movies        50G     46G    3.6G   93%  /mnt/movies
-# d505.pl:$Conf{RsyncShareName} = ['/home','/root','/etc','/var/log'];
-]
-
-top = '/greenback'
-maxAge = 10000000
-defaultMinAge = 86400
-keepCount = 9
-daily = 'daily'
-options = ()
+from configobj import ConfigObj         # apt-get install python-configobj
+import imp
 
 # globals
+top = '/backup'
+customize = ('src', 'minAge', 'disabled', 'label', 'keepCount')
+maxAge = 10000000
+# defaults (globals)
+defaultMinAge = 86400
+defaultKeepCount = 9
+defaultLabel = 'daily'
+# plumbing (globals)
+options = ()
 g_logFD = None
-debugMode = False
 
 #-----------------------------------------------------------
 
@@ -125,11 +96,11 @@ def do_backup(v):
         '--numeric-ids',
         '--one-file-system',
 #       '-v',
-        '--link-dest='+top+'/'+v['host']+'/'+v['name']+'/'+daily+'.1',
+        '--link-dest='+top+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.1',
     ]
 
     src = v['src']
-    dest = top+'/'+v['host']+'/'+v['name']+'/'+daily+'.0'
+    dest = top+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.0'
 
     # optional - "excludes" file
     excludes = top+'/'+v['host']+'/'+v['name']+'/excludes'
@@ -163,7 +134,7 @@ def do_backup(v):
     complete = True if rc in (0, 24) else False
     log_debug('rc = %d, '%rc)
 
-    prefix = top+'/'+v['host']+'/'+v['name']+'/'+daily+'.'
+    prefix = top+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.'
     if os.path.isdir(prefix+'0') == False:
         log_debug(prefix+'0 directory was not found, marking incomplete')
         complete = False
@@ -174,10 +145,10 @@ def do_backup(v):
         # "touch" the timestamp
         os.utime(prefix+'0',None)
         # rotate the numbered backups
-        if os.path.isdir(prefix+str(keepCount)):
-            log_debug('removing '+str(keepCount))
-            shutil.rmtree(prefix+str(keepCount))
-        for i in range(keepCount,0,-1):
+        if os.path.isdir(prefix+str(v['keepCount'])):
+            log_debug('removing '+str(v['keepCount']))
+            shutil.rmtree(prefix+str(v['keepCount']))
+        for i in range(v['keepCount'],0,-1):
             if os.path.isdir(prefix+str(i-1)):
                 log_debug('renaming '+str(i-1)+' -> '+str(i))
                 os.rename(prefix+str(i-1),prefix+str(i))
@@ -193,9 +164,64 @@ def do_backup(v):
 
 def do_single_pass():
 
+    volumeInfo = []
+
+    configfilename = top+'/config.py'
+    try:
+        config = imp.load_source('config', configfilename)
+        log_debug("config file '"+configfilename+"' found")
+        volumeInfo = config.volumeInfo
+    except ImportError:
+        log_debug("config file '"+configfilename+"' not found")
+        pass
+
+    # FILL IN THE 'volumeInfo' DICTIONARY
+
+    for volume in volumeInfo:
+
+        # set an index to refer to this entry by
+        index = volume['host']+'-'+volume['name']
+        volume['index'] = index
+
+        # set some defaults
+        volume['lastBackup'] = '2000-01-01 00:00:00'
+
+        configfiles=[]
+        # (optional) config file from /backup/host/config
+        configfiles.append(top+'/'+volume['host']+'/config')
+        # (optional) config file from /backup/host/name/config
+        configfiles.append(top+'/'+volume['host']+'/'+volume['name']+'/config')
+
+        for configfile in configfiles:
+            # read the config files if they exist
+            if os.path.isfile(configfile):
+                log_info("reading config file '"+configfile+"'")
+                config = ConfigObj(configfile)
+                # if these options are set in the config file, use them
+                for key in customize:
+                    if key in config:
+                        log_info(' - '+index+': '+key+'='+config[key])
+                        volume[key] = config[key]
+            else:
+                log_debug("no config file '"+configfile+"'")
+
+        # if these options are not defined anywhere else, assign defaults
+        if 'label' not in volume: volume['label'] = defaultLabel
+        if 'minAge' not in volume: volume['minAge'] = defaultMinAge
+        if 'disabled' not in volume: volume['disabled'] = False
+        if 'keepCount' not in volume: volume['keepCount'] = defaultKeepCount
+
+        # force proper formats
+        if isinstance(volume['minAge'], basestring):
+            volume['minAge'] = int(volume['minAge'])
+        if isinstance(volume['disabled'], basestring):
+            if volume['disabled'].lower in ('yes','y','true','1'):
+                volume['disabled'] = True
+
     # LOOK AT RECENT BACKUPS
 
-    recentBackups = glob.glob(top+'/*/*/'+daily+'.1')
+    # TODO - don't just read all files, start from config instead
+    recentBackups = glob.glob(top+'/*/*/*.1')
     for recentBackup in recentBackups:
         # break the wildcard (glob) into parts
         junk1, junk2, right = recentBackup.partition(top)
@@ -208,7 +234,7 @@ def do_single_pass():
         lastBackup = time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(os.path.getmtime(recentBackup)))
         # find the volumeInfo line that contains key='host-name'
         try:
-            idx = map(operator.itemgetter('key'), volumeInfo).index(host+'-'+name)
+            idx = map(operator.itemgetter('index'), volumeInfo).index(host+'-'+name)
             log_debug('host='+host+', name='+name+', lastBackup='+lastBackup+', '+host+'-'+name+' is in slot %d'%idx)
             volumeInfo[idx]['lastBackup'] = lastBackup
         except ValueError:
@@ -231,9 +257,9 @@ def do_single_pass():
 
     # SHOW THE SORTED LIST IN THE LOG
 
-    maxKeyWidth = 0
+    maxIdxWidth = 0
     for volume in volumeInfo:
-        maxKeyWidth = max(maxKeyWidth,len(volume['key']))
+        maxIdxWidth = max(maxIdxWidth,len(volume['index']))
 
     log_info('volumes:')
     now = datetime.datetime.now()
@@ -243,7 +269,7 @@ def do_single_pass():
         if volume['currentAge'] < volume['minAge']:
             status = 'NEXT RUN %dd+%d:%02d:%02d' % (d,h,m,s)
         if volume['disabled']: status='DISABLED'
-        log_info('   '+volume['key']+(' '*(maxKeyWidth-len(volume['key'])))
+        log_info('   '+volume['index']+(' '*(maxIdxWidth-len(volume['index'])))
              +' -> '+volume['lastBackup']
              +' = '+('%d'%volume['currentAge'])+'/'+('%d'%volume['minAge'])
              +'   '+status)
@@ -294,15 +320,6 @@ def main():
     except IOError as e:
         pass
     file(pidfile,'w').write(str(os.getpid())+'\n')
-
-    # ADD SOME DEFAULTS TO 'volumeInfo' DICTIONARY
-
-    for volume in volumeInfo:
-        key = volume['host']+'-'+volume['name']
-        volume['key'] = key
-        volume['lastBackup'] = '2000-01-01 00:00:00'
-        if 'minAge' not in volume: volume['minAge'] = defaultMinAge
-        if 'disabled' not in volume: volume['disabled'] = False
 
     while True:
         do_single_pass()
