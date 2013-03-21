@@ -12,9 +12,12 @@ import time
 import shutil
 from configobj import ConfigObj         # apt-get install python-configobj
 import imp
+import errno
 
 # globals
-top = '/backup'
+programName = 'greenback'
+topdir = '/backup'
+libdir = '/var/lib/'+programName
 customize = ('src', 'minAge', 'disabled', 'label', 'keepCount')
 maxAge = 10000000
 # defaults (globals)
@@ -35,7 +38,7 @@ def log_init():
     #  if not os.path.exists(logdir):
     #     os.makedirs(logdir)
     #  logfile = logdir+"/garage.log"
-    #  logfile = 'greenback.log'
+    #  logfile = programName+'.log'
     logfile = '/dev/stdout'
     g_logFD = open(logfile,'a')
 
@@ -85,7 +88,30 @@ def sec2dhms(s):
 
 #-----------------------------------------------------------
 
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc: # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else: raise
+
+#-----------------------------------------------------------
+
+def write_status(doing,target=None):
+    statusFileName = libdir+'/status'
+    statusFile = file(statusFileName,'w')
+    statusFile.write('pid='+str(os.getpid())+'\n')
+    statusFile.write('status='+doing+'\n')
+    if target is not None:
+        statusFile.write('target='+target+'\n')
+    statusFile.close()
+
+#-----------------------------------------------------------
+
 def do_backup(v):
+
+    write_status('backup',v['index'])
 
     args = [
         '-al',
@@ -96,14 +122,14 @@ def do_backup(v):
         '--numeric-ids',
         '--one-file-system',
 #       '-v',
-        '--link-dest='+top+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.1',
+        '--link-dest='+topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.1',
     ]
 
     src = v['src']
-    dest = top+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.0'
+    dest = topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.0'
 
     # optional - "excludes" file
-    excludes = top+'/'+v['host']+'/'+v['name']+'/excludes'
+    excludes = topdir+'/'+v['host']+'/'+v['name']+'/excludes'
     log_debug('testing for ['+excludes+']')
     if os.path.isfile(excludes):
         log_debug('"excludes" file found, adding argument')
@@ -134,17 +160,17 @@ def do_backup(v):
     complete = True if rc in (0, 24) else False
     log_debug('rc = %d, '%rc)
 
-    prefix = top+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.'
+    prefix = topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.'
     if os.path.isdir(prefix+'0') == False:
         log_debug(prefix+'0 directory was not found, marking incomplete')
         complete = False
-
 
     if complete:
         log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
         # "touch" the timestamp
         os.utime(prefix+'0',None)
         # rotate the numbered backups
+        write_status('rotate',v['index'])
         if os.path.isdir(prefix+str(v['keepCount'])):
             log_debug('removing '+str(v['keepCount']))
             shutil.rmtree(prefix+str(v['keepCount']))
@@ -166,7 +192,9 @@ def do_single_pass():
 
     volumeInfo = []
 
-    configfilename = top+'/config.py'
+    write_status('thinking')
+
+    configfilename = topdir+'/config.py'
     try:
         config = imp.load_source('config', configfilename)
         log_debug("config file '"+configfilename+"' found")
@@ -188,9 +216,9 @@ def do_single_pass():
 
         configfiles=[]
         # (optional) config file from /backup/host/config
-        configfiles.append(top+'/'+volume['host']+'/config')
+        configfiles.append(topdir+'/'+volume['host']+'/config')
         # (optional) config file from /backup/host/name/config
-        configfiles.append(top+'/'+volume['host']+'/'+volume['name']+'/config')
+        configfiles.append(topdir+'/'+volume['host']+'/'+volume['name']+'/config')
 
         for configfile in configfiles:
             # read the config files if they exist
@@ -221,10 +249,10 @@ def do_single_pass():
     # LOOK AT RECENT BACKUPS
 
     # TODO - don't just read all files, start from config instead
-    recentBackups = glob.glob(top+'/*/*/*.1')
+    recentBackups = glob.glob(topdir+'/*/*/*.1')
     for recentBackup in recentBackups:
         # break the wildcard (glob) into parts
-        junk1, junk2, right = recentBackup.partition(top)
+        junk1, junk2, right = recentBackup.partition(topdir)
         pathpieces = right.split('/')
         host = pathpieces[1]
         name = pathpieces[2]
@@ -282,6 +310,7 @@ def do_single_pass():
         if volume['currentAge'] < volume['minAge']: continue
         if volume['disabled']: continue
         do_backup(volume)
+    write_status('idle')
     log_info('end of single pass')
 
 #-----------------------------------------------------------
@@ -304,7 +333,7 @@ def main():
 
     # LOOK FOR PID FILE, EXIT IF FOUND
 
-    pidfile='/var/run/greenback.pid'
+    pidfile='/var/run/'+programName+'.pid'
     try:
         with open(pidfile) as f:
             log_info("pidfile '%s' found... better look for a running process" % pidfile)
@@ -320,6 +349,12 @@ def main():
     except IOError as e:
         pass
     file(pidfile,'w').write(str(os.getpid())+'\n')
+
+    # SET UP SUPPORT/STATUS DIRECTORY
+
+    mkdir_p(libdir)
+
+    # LOOP FOREVER, WORK AND SLEEP
 
     while True:
         do_single_pass()
