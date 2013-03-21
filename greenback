@@ -101,6 +101,7 @@ def mkdir_p(path):
 def write_status(doing,target=None):
     statusFileName = libdir+'/status'
     statusFile = file(statusFileName,'w')
+    statusFile.write('time='+datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')+'\n')
     statusFile.write('pid='+str(os.getpid())+'\n')
     statusFile.write('status='+doing+'\n')
     if target is not None:
@@ -286,8 +287,12 @@ def do_single_pass():
     # SHOW THE SORTED LIST IN THE LOG
 
     maxIdxWidth = 0
+    maxCurageWidth = 0
+    maxMinageWidth = 0
     for volume in volumeInfo:
-        maxIdxWidth = max(maxIdxWidth,len(volume['index']))
+        maxIdxWidth = max(maxIdxWidth, len(volume['index']))
+        maxCurageWidth = max(maxCurageWidth, len(str(volume['currentAge'])))
+        maxMinageWidth = max(maxMinageWidth, len(str(volume['minAge'])))
 
     log_info('volumes:')
     now = datetime.datetime.now()
@@ -297,9 +302,14 @@ def do_single_pass():
         if volume['currentAge'] < volume['minAge']:
             status = 'NEXT RUN %dd+%d:%02d:%02d' % (d,h,m,s)
         if volume['disabled']: status='DISABLED'
+        curFormat = '%'+str(maxCurageWidth)+'d'
+        minFormat = '%-'+str(maxMinageWidth)+'d'
         log_info('   '+volume['index']+(' '*(maxIdxWidth-len(volume['index'])))
              +' -> '+volume['lastBackup']
-             +' = '+('%d'%volume['currentAge'])+'/'+('%d'%volume['minAge'])
+             +' = '
+             +(curFormat % volume['currentAge'])
+             +'/'
+             +(minFormat % volume['minAge'])
              +'   '+status)
     log_info('')
 
