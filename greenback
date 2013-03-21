@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python -B
 
 import os
 import datetime
@@ -14,16 +14,23 @@ from configobj import ConfigObj         # apt-get install python-configobj
 import imp
 import errno
 
+class DefaultsClass:
+    def __init__ (self, *argv, **argd):
+        self.__dict__.update (argd)
+
 # globals
 programName = 'greenback'
 topdir = '/backup'
 libdir = '/var/lib/'+programName
-customize = ('src', 'minAge', 'disabled', 'label', 'keepCount')
+customize = ('src', 'cycleMin', 'disabled', 'label', 'keepCount')
 maxAge = 10000000
+sleepMin = 10
 # defaults (globals)
-defaultMinAge = 86400
-defaultKeepCount = 9
-defaultLabel = 'daily'
+class defaults (DefaultsClass):
+    lastBackup = '2000-01-01 00:00:00'
+    cycleMin = 24*60
+    keepCount = 9
+    label = 'daily'
 # plumbing (globals)
 options = ()
 g_logFD = None
@@ -213,7 +220,7 @@ def do_single_pass():
         volume['index'] = index
 
         # set some defaults
-        volume['lastBackup'] = '2000-01-01 00:00:00'
+        volume['lastBackup'] = defaults.lastBackup
 
         configfiles=[]
         # (optional) config file from /backup/host/config
@@ -235,14 +242,14 @@ def do_single_pass():
                 log_debug("no config file '"+configfile+"'")
 
         # if these options are not defined anywhere else, assign defaults
-        if 'label' not in volume: volume['label'] = defaultLabel
-        if 'minAge' not in volume: volume['minAge'] = defaultMinAge
+        if 'label' not in volume: volume['label'] = defaults.label
+        if 'cycleMin' not in volume: volume['cycleMin'] = defaults.cycleMin
         if 'disabled' not in volume: volume['disabled'] = False
-        if 'keepCount' not in volume: volume['keepCount'] = defaultKeepCount
+        if 'keepCount' not in volume: volume['keepCount'] = defaults.keepCount
 
         # force proper formats
-        if isinstance(volume['minAge'], basestring):
-            volume['minAge'] = int(volume['minAge'])
+        if isinstance(volume['cycleMin'], basestring):
+            volume['cycleMin'] = int(volume['minAge'])
         if isinstance(volume['disabled'], basestring):
             if volume['disabled'].lower in ('yes','y','true','1'):
                 volume['disabled'] = True
@@ -276,9 +283,9 @@ def do_single_pass():
     for volume in volumeInfo:
         lastBackup = datetime.datetime.strptime(volume['lastBackup'],'%Y-%m-%d %H:%M:%S')
         ageDelta = now - lastBackup
-        currentAge = ageDelta.seconds + (ageDelta.days * 86400)
-        volume['currentAge'] = currentAge
-        nextBackup = volume['minAge'] - volume['currentAge']
+        ageMin = (ageDelta.seconds // 60) + (ageDelta.days * 1440)
+        volume['ageMin'] = ageMin
+        nextBackup = volume['cycleMin'] - volume['ageMin']
         if volume['disabled']: nextBackup = maxAge
         volume['nextBackup'] = nextBackup
 
@@ -291,15 +298,15 @@ def do_single_pass():
     maxMinageWidth = 0
     for volume in volumeInfo:
         maxIdxWidth = max(maxIdxWidth, len(volume['index']))
-        maxCurageWidth = max(maxCurageWidth, len(str(volume['currentAge'])))
-        maxMinageWidth = max(maxMinageWidth, len(str(volume['minAge'])))
+        maxCurageWidth = max(maxCurageWidth, len(str(volume['ageMin'])))
+        maxMinageWidth = max(maxMinageWidth, len(str(volume['cycleMin'])))
 
     log_info('volumes:')
     now = datetime.datetime.now()
     for volume in sortedVolumes:
         (d,h,m,s) = sec2dhms( volume['nextBackup'] )
         status='READY'
-        if volume['currentAge'] < volume['minAge']:
+        if volume['ageMin'] < volume['cycleMin']:
             status = 'NEXT RUN %dd+%d:%02d:%02d' % (d,h,m,s)
         if volume['disabled']: status='DISABLED'
         curFormat = '%'+str(maxCurageWidth)+'d'
@@ -307,9 +314,9 @@ def do_single_pass():
         log_info('   '+volume['index']+(' '*(maxIdxWidth-len(volume['index'])))
              +' -> '+volume['lastBackup']
              +' = '
-             +(curFormat % volume['currentAge'])
+             +(curFormat % volume['ageMin'])
              +'/'
-             +(minFormat % volume['minAge'])
+             +(minFormat % volume['cycleMin'])
              +'   '+status)
     log_info('')
 
@@ -317,10 +324,9 @@ def do_single_pass():
 
     log_info('start of single pass')
     for volume in sortedVolumes:
-        if volume['currentAge'] < volume['minAge']: continue
+        if volume['ageMin'] < volume['cycleMin']: continue
         if volume['disabled']: continue
         do_backup(volume)
-    write_status('idle')
     log_info('end of single pass')
 
 #-----------------------------------------------------------
@@ -368,7 +374,10 @@ def main():
 
     while True:
         do_single_pass()
-        time.sleep(10*60)
+        # sleep for a little bit
+        for i in range(1, sleepMin):
+            write_status('idle')
+            time.sleep(60)
 
     # CLEAN UP
 
