@@ -39,9 +39,13 @@ while true ; do
          led_blink 3 0.1 0.3
          sleep 2
          ;;
-      'backup'|'rotate')
+      'backup')
          # blink very quickly
          led_blink 2 0.2 0.4
+         ;;
+      'rotate')
+         # blink very quickly
+         led_blink 2 0.1 0.2
          ;;
       'idle')
          # blink very slowly
