@@ -200,10 +200,12 @@ def buildVolumeTable():
 
         # force proper formats
         if isinstance(volume['cycleMin'], basestring):
-            volume['cycleMin'] = int(volume['minAge'])
+            volume['cycleMin'] = int(volume['cycleMin'])
         if isinstance(volume['disabled'], basestring):
             if volume['disabled'].lower in ('yes','y','true','1'):
                 volume['disabled'] = True
+            else:
+                volume['disabled'] = False
 
     # LOOK AT RECENT BACKUPS
 
