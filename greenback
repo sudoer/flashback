@@ -106,97 +106,77 @@ def mkdir_p(path):
 #-----------------------------------------------------------
 
 def write_status(doing,target=None):
+    log_debug('writing status file')
     statusFileName = libdir+'/status'
     statusFile = file(statusFileName,'w')
-    statusFile.write('time='+datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')+'\n')
+    now = datetime.datetime.now()
+    statusFile.write('date='+datetime.datetime.strftime(now,'%Y-%m-%d')+'\n')
+    statusFile.write('time='+datetime.datetime.strftime(now,'%H:%M:%S')+'\n')
     statusFile.write('pid='+str(os.getpid())+'\n')
     statusFile.write('status='+doing+'\n')
     if target is not None:
         statusFile.write('target='+target+'\n')
+    (total, used, free) = disk_usage(topdir)
+    statusFile.write('disk.mntpt='+topdir+'\n')
+    statusFile.write('disk.total='+str(total)+'\n')
+    statusFile.write('disk.used='+str(used)+'\n')
+    statusFile.write('disk.free='+str(free)+'\n')
     statusFile.close()
 
 #-----------------------------------------------------------
 
-def do_backup(v):
+def disk_usage(path):
+    """Return disk usage statistics about the given path.
 
-    write_status('backup',v['index'])
-
-    args = [
-        '-al',
-        '-E',
-        '--delete',
-        '--delete-excluded',
-#       '--stats',
-        '--numeric-ids',
-        '--one-file-system',
-#       '-v',
-        '--link-dest='+topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.1',
-    ]
-
-    src = v['src']
-    dest = topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.0'
-
-    # optional - "excludes" file
-    excludes = topdir+'/'+v['host']+'/'+v['name']+'/excludes'
-    log_debug('testing for ['+excludes+']')
-    if os.path.isfile(excludes):
-        log_debug('"excludes" file found, adding argument')
-        args.append('--exclude-from='+excludes)
-
-    rc = shell_do(['/usr/bin/rsync'] + args + [src, dest])
-
-    #   0      Success
-    #   1      Syntax or usage error
-    #   2      Protocol incompatibility
-    #   3      Errors selecting input/output files, dirs
-    #   4      Requested action not supported
-    #   5      Error starting client-server protocol
-    #   6      Daemon unable to append to log-file
-    #   10     Error in socket I/O
-    #   11     Error in file I/O
-    #   12     Error in rsync protocol data stream
-    #   13     Errors with program diagnostics
-    #   14     Error in IPC code
-    #   20     Received SIGUSR1 or SIGINT
-    #   21     Some error returned by waitpid()
-    #   22     Error allocating core memory buffers
-    #   23     Partial transfer due to error
-    #   24     Partial transfer due to vanished source files
-    #   25     The --max-delete limit stopped deletions
-    #   30     Timeout in data send/receive
-    #   35     Timeout waiting for daemon connection
-    complete = True if rc in (0, 24) else False
-    log_debug('rc = %d, '%rc)
-
-    prefix = topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.'
-    if os.path.isdir(prefix+'0') == False:
-        log_debug(prefix+'0 directory was not found, marking incomplete')
-        complete = False
-
-    if complete:
-        log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
-        # "touch" the timestamp
-        os.utime(prefix+'0',None)
-        # rotate the numbered backups
-        write_status('rotate',v['index'])
-        if os.path.isdir(prefix+str(v['keepCount'])):
-            log_debug('removing '+str(v['keepCount']))
-            shutil.rmtree(prefix+str(v['keepCount']))
-        for i in range(v['keepCount'],0,-1):
-            if os.path.isdir(prefix+str(i-1)):
-                log_debug('renaming '+str(i-1)+' -> '+str(i))
-                os.rename(prefix+str(i-1),prefix+str(i))
-    else: # not complete
-        log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
-        if os.path.isdir(prefix+'0'):
-            log_debug('removing 0')
-            shutil.rmtree(prefix+'0')
-
-    log_debug('done')
+    Returned value is a tuple with three attributes:
+    'total', 'used' and 'free' (in bytes).
+    """
+    st = os.statvfs(path)
+    free = st.f_bavail * st.f_frsize
+    total = st.f_blocks * st.f_frsize
+    used = (st.f_blocks - st.f_bfree) * st.f_frsize
+    return (total, used, free)
 
 #-----------------------------------------------------------
 
-def do_single_pass():
+def formattedTable(volumes):
+    widths = { 'index':0, 'lastBackup':0, 'ageMin':0, 'cycleMin':0, 'status':0 }
+    for volume in volumes:
+        for fld in ('index','ageMin','cycleMin'):
+            widths[fld] = max(widths[fld], len(str(volume[fld])))
+    #widths['lastBackup'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
+    widths['lastBackup'] = len('2013-03-20 21:05:18')
+    widths['status'] = len('NEXT RUN 100d+23:59:59')
+
+    table = []
+    table.append(''
+        + 'INDEX'.center(widths['index'])            + '   '
+        + 'LAST BACKUP'.center(widths['lastBackup']) + '   '
+        + 'AGE'.center(widths['ageMin'])             + '/'
+        + 'CYCLE'.center(widths['cycleMin'])         + '   '
+        + 'STATUS'.center(widths['status'])
+    )
+
+    now = datetime.datetime.now()
+    for volume in volumes:
+        (d,h,m,s) = sec2dhms( volume['nextBackup'] * 60 )
+        status='READY'
+        if volume['ageMin'] < volume['cycleMin']:
+            status = 'NEXT RUN %dd+%d:%02d' % (d,h,m)
+        if volume['disabled']: status='DISABLED'
+        table.append(''
+            + volume['index'].ljust(widths['index'])            + '   '
+            + volume['lastBackup']                              + '   '
+            + str(volume['ageMin']).rjust(widths['ageMin'])     + '/'
+            + str(volume['cycleMin']).ljust(widths['cycleMin']) + '   '
+            + status.ljust(widths['status'])
+        )
+
+    return table
+
+#-----------------------------------------------------------
+
+def buildVolumeTable():
 
     volumeInfo = []
 
@@ -291,43 +271,136 @@ def do_single_pass():
 
     sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('nextBackup'))
 
+    return sortedVolumes
+
+#-----------------------------------------------------------
+
+def tableToLogAndDisk(volumeInfo):
+
+    # CREATE A FORMATTED TABLE
+
+    table = formattedTable(volumeInfo)
+
+    # DUMP THE SORTED LIST IN A TEXT FILE
+
+    tableFileName = libdir+'/queue'
+    tableFile = file(tableFileName,'w')
+    tableFile.write(datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')+'\n')
+    tableFile.write('\n')
+    for line in table:
+        tableFile.write(line+'\n')
+    tableFile.close()
+
     # SHOW THE SORTED LIST IN THE LOG
 
-    maxIdxWidth = 0
-    maxCurageWidth = 0
-    maxMinageWidth = 0
-    for volume in volumeInfo:
-        maxIdxWidth = max(maxIdxWidth, len(volume['index']))
-        maxCurageWidth = max(maxCurageWidth, len(str(volume['ageMin'])))
-        maxMinageWidth = max(maxMinageWidth, len(str(volume['cycleMin'])))
-
     log_info('volumes:')
-    now = datetime.datetime.now()
-    for volume in sortedVolumes:
-        (d,h,m,s) = sec2dhms( volume['nextBackup'] )
-        status='READY'
-        if volume['ageMin'] < volume['cycleMin']:
-            status = 'NEXT RUN %dd+%d:%02d:%02d' % (d,h,m,s)
-        if volume['disabled']: status='DISABLED'
-        curFormat = '%'+str(maxCurageWidth)+'d'
-        minFormat = '%-'+str(maxMinageWidth)+'d'
-        log_info('   '+volume['index']+(' '*(maxIdxWidth-len(volume['index'])))
-             +' -> '+volume['lastBackup']
-             +' = '
-             +(curFormat % volume['ageMin'])
-             +'/'
-             +(minFormat % volume['cycleMin'])
-             +'   '+status)
+    for line in table:
+        log_info(line)
     log_info('')
+
+#-----------------------------------------------------------
+
+def do_backup(v):
+
+    write_status('backup',v['index'])
+
+    args = [
+        '-al',
+        '-E',
+        '--delete',
+        '--delete-excluded',
+#       '--stats',
+        '--numeric-ids',
+        '--one-file-system',
+#       '-v',
+        '--link-dest='+topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.1',
+    ]
+
+    src = v['src']
+    dest = topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.0'
+
+    # optional - "excludes" file
+    excludes = topdir+'/'+v['host']+'/'+v['name']+'/excludes'
+    log_debug('testing for ['+excludes+']')
+    if os.path.isfile(excludes):
+        log_debug('"excludes" file found, adding argument')
+        args.append('--exclude-from='+excludes)
+
+    cmd = ['/usr/bin/rsync'] + args + [src, dest]
+    log_info('running >> '+(','.join(cmd)))
+    rc = shell_do(cmd)
+
+    #   0      Success
+    #   1      Syntax or usage error
+    #   2      Protocol incompatibility
+    #   3      Errors selecting input/output files, dirs
+    #   4      Requested action not supported
+    #   5      Error starting client-server protocol
+    #   6      Daemon unable to append to log-file
+    #   10     Error in socket I/O
+    #   11     Error in file I/O
+    #   12     Error in rsync protocol data stream
+    #   13     Errors with program diagnostics
+    #   14     Error in IPC code
+    #   20     Received SIGUSR1 or SIGINT
+    #   21     Some error returned by waitpid()
+    #   22     Error allocating core memory buffers
+    #   23     Partial transfer due to error
+    #   24     Partial transfer due to vanished source files
+    #   25     The --max-delete limit stopped deletions
+    #   30     Timeout in data send/receive
+    #   35     Timeout waiting for daemon connection
+    complete = True if rc in (0, 24) else False
+    log_debug('rc = %d, '%rc)
+
+    prefix = topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.'
+    if os.path.isdir(prefix+'0') == False:
+        log_debug(prefix+'0 directory was not found, marking incomplete')
+        complete = False
+
+    if complete:
+        log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
+        # "touch" the timestamp
+        os.utime(prefix+'0',None)
+        # rotate the numbered backups
+        write_status('rotate',v['index'])
+        if os.path.isdir(prefix+str(v['keepCount'])):
+            log_debug('removing '+str(v['keepCount']))
+            shutil.rmtree(prefix+str(v['keepCount']))
+        for i in range(v['keepCount'],0,-1):
+            if os.path.isdir(prefix+str(i-1)):
+                log_debug('renaming '+str(i-1)+' -> '+str(i))
+                os.rename(prefix+str(i-1),prefix+str(i))
+    else: # not complete
+        log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
+        if os.path.isdir(prefix+'0'):
+            log_debug('removing 0')
+            shutil.rmtree(prefix+'0')
+
+    log_debug('done')
+
+    return 1 if complete else 0
+
+#-----------------------------------------------------------
+
+def do_single_pass():
+
+    volumes = buildVolumeTable()
+    tableToLogAndDisk(volumes)
 
     # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
 
     log_info('start of single pass')
-    for volume in sortedVolumes:
+    count = 0
+    for volume in volumes:
         if volume['ageMin'] < volume['cycleMin']: continue
         if volume['disabled']: continue
-        do_backup(volume)
+        count += do_backup(volume)
     log_info('end of single pass')
+
+    if count > 0 :
+        volumes = buildVolumeTable()
+        tableToLogAndDisk(volumes)
 
 #-----------------------------------------------------------
 
