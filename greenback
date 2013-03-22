@@ -33,7 +33,7 @@ maxAge = 10000000
 sleepMin = 10
 # defaults (globals)
 class defaults (DefaultsClass):
-    lastBackup = '2000-01-01 00:00:00'
+    lastBackupTime = '2000-01-01 00:00:00'
     cycleMin = 24*60
     keepCount = 9
     label = 'daily'
@@ -169,7 +169,7 @@ def buildVolumeTable():
         volume['index'] = index
 
         # set some defaults
-        volume['lastBackup'] = defaults.lastBackup
+        volume['lastBackupTime'] = defaults.lastBackupTime
         volume['status'] = status.UNKNOWN
 
         configfiles=[]
@@ -221,27 +221,27 @@ def buildVolumeTable():
         # Get the creation time of the daily.1 directory.
         # Note: ctime() does not refer to creation time on *nix systems,
         # but rather the last time the inode data changed.
-        lastBackup = time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(os.path.getmtime(recentBackup)))
+        lastBackupTime = time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(os.path.getmtime(recentBackup)))
         # find the volumeInfo line that contains key='host-name'
         try:
             idx = map(operator.itemgetter('index'), volumeInfo).index(host+'-'+name)
-            log_debug('host='+host+', name='+name+', lastBackup='+lastBackup+', '+host+'-'+name+' is in slot %d'%idx)
-            volumeInfo[idx]['lastBackup'] = lastBackup
+            log_debug('host='+host+', name='+name+', lastBackupTime='+lastBackupTime+', '+host+'-'+name+' is in slot %d'%idx)
+            volumeInfo[idx]['lastBackupTime'] = lastBackupTime
         except ValueError:
-            log_debug('host='+host+', name='+name+', lastBackup='+lastBackup+', '+host+'-'+name+' is not in the list of volumes')
+            log_debug('host='+host+', name='+name+', lastBackupTime='+lastBackupTime+', '+host+'-'+name+' is not in the list of volumes')
             pass
 
     # GO THROUGH THE LIST IN ORDER, DETERMINE THEIR AGES AND NEXT BACKUP TIME
 
     now = datetime.datetime.now()
     for volume in volumeInfo:
-        lastBackup = datetime.datetime.strptime(volume['lastBackup'],'%Y-%m-%d %H:%M:%S')
-        ageDelta = now - lastBackup
+        lastBackupTime = datetime.datetime.strptime(volume['lastBackupTime'],'%Y-%m-%d %H:%M:%S')
+        ageDelta = now - lastBackupTime
         volume['ageMin'] = (ageDelta.seconds // 60) + (ageDelta.days * 1440)
-        volume['nextBackup'] = volume['cycleMin'] - volume['ageMin']
-        log_debug('index='+volume['index']+', nextBackup='+str(volume['nextBackup'])+'min')
+        volume['nextBackupMin'] = volume['cycleMin'] - volume['ageMin']
+        log_debug('index='+volume['index']+', nextBackupMin='+str(volume['nextBackupMin'])+'min')
         # force disabled backups to the bottom of the list
-        if volume['disabled']: volume['nextBackup'] = maxAge
+        if volume['disabled']: volume['nextBackupMin'] = maxAge
 
     for volume in volumeInfo:
         # If "cycleMin" has transpired since our last backup, we're "ready".
@@ -250,31 +250,31 @@ def buildVolumeTable():
         # No matter if "ready" or not, if disabled, don't back up.
         if volume['disabled']: volume['status'] = status.DISABLED
 
-    sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('nextBackup'))
+    sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('nextBackupMin'))
 
     return sortedVolumes
 
 #-----------------------------------------------------------
 
 def formattedTable(volumes):
-    widths = { 'index':0, 'lastBackup':0, 'ageMin':0, 'cycleMin':0 }
+    widths = { 'index':0, 'lastBackupTime':0, 'ageMin':0, 'cycleMin':0 }
     for volume in volumes:
         for fld in ('index','ageMin','cycleMin'):
             widths[fld] = max(widths[fld], len(str(volume[fld])))
-    #widths['lastBackup'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
-    widths['lastBackup'] = len('2013-03-20 21:05:18')
+    #widths['lastBackupTime'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
+    widths['lastBackupTime'] = len('2013-03-20 21:05:18')
 
     table = []
     table.append(''
-        + 'INDEX'.center(widths['index'])            + '   '
-        + 'LAST BACKUP'.center(widths['lastBackup']) + '   '
-        + 'AGE'.center(widths['ageMin'])             + '/'
-        + 'CYCLE'.center(widths['cycleMin'])         + '   '
+        + 'INDEX'.center(widths['index'])                + '   '
+        + 'LAST BACKUP'.center(widths['lastBackupTime']) + '   '
+        + 'AGE'.center(widths['ageMin'])                 + '/'
+        + 'CYCLE'.center(widths['cycleMin'])             + '   '
         + 'STATUS')
 
     now = datetime.datetime.now()
     for volume in volumes:
-        (d,h,m,s) = sec2dhms( volume['nextBackup'] * 60 )
+        (d,h,m,s) = sec2dhms( volume['nextBackupMin'] * 60 )
         switch = {
             status.UNKNOWN:   '???',
             status.DISABLED:  'DISABLED',
@@ -285,7 +285,7 @@ def formattedTable(volumes):
         }
         table.append(''
             + volume['index'].ljust(widths['index'])            + '   '
-            + volume['lastBackup']                              + '   '
+            + volume['lastBackupTime']                          + '   '
             + str(volume['ageMin']).rjust(widths['ageMin'])     + '/'
             + str(volume['cycleMin']).ljust(widths['cycleMin']) + '   '
             + switch[volume['status']]
@@ -425,14 +425,13 @@ def do_single_pass():
         do_backup(volume)
         tableToLogAndDisk(volumes)
 
-    write_status('idle',sleepMin,None)
     log_info('end of single pass')
 
     # sleep for a little bit
-    for i in range(sleepMin,1,-1):
-        time.sleep(60)
+    for i in range(sleepMin,0,-1):
         write_status('idle',i,None)
         tableToLogAndDisk(volumes)
+        time.sleep(60)
 
 #-----------------------------------------------------------
 
