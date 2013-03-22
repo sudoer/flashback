@@ -150,8 +150,6 @@ def buildVolumeTable():
 
     volumeInfo = []
 
-    write_status('thinking')
-
     configfilename = topdir+'/config.py'
     try:
         config = imp.load_source('config', configfilename)
@@ -386,10 +384,12 @@ def do_backup(v):
         if os.path.isdir(prefix+str(v['keepCount'])):
             log_debug('removing '+str(v['keepCount']))
             shutil.rmtree(prefix+str(v['keepCount']))
+        rotates=[]
         for i in range(v['keepCount'],0,-1):
             if os.path.isdir(prefix+str(i-1)):
-                log_debug('renaming '+str(i-1)+' -> '+str(i))
                 os.rename(prefix+str(i-1),prefix+str(i))
+                rotates.append(str(i-1)+'>>'+str(i))
+        log_debug('rotating '+('  '.join(rotates)))
     else: # not complete
         log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
         if os.path.isdir(prefix+'0'):
@@ -409,20 +409,27 @@ def do_backup(v):
 
 def do_single_pass():
 
+    write_status('thinking')
     volumes = buildVolumeTable()
     tableToLogAndDisk(volumes)
 
     # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
 
     log_info('start of single pass')
-    count = 0
     for volume in volumes:
         if volume['ageMin'] < volume['cycleMin']: continue
         if volume['disabled']: continue
-        count += do_backup(volume)
+        do_backup(volume)
         tableToLogAndDisk(volumes)
 
+    write_status('idle')
     log_info('end of single pass')
+
+    # sleep for a little bit
+    for i in range(1, sleepMin):
+        time.sleep(60)
+        write_status('idle')
+        tableToLogAndDisk(volumes)
 
 #-----------------------------------------------------------
 
@@ -469,10 +476,6 @@ def main():
 
     while True:
         do_single_pass()
-        # sleep for a little bit
-        for i in range(1, sleepMin):
-            write_status('idle')
-            time.sleep(60)
 
     # CLEAN UP
 
