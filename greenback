@@ -120,7 +120,7 @@ def write_status(doing,waitTime,target):
     statusFile.write('date='+datetime.datetime.strftime(now,'%Y-%m-%d')+'\n')
     statusFile.write('time='+datetime.datetime.strftime(now,'%H:%M:%S')+'\n')
     statusFile.write('pid='+str(os.getpid())+'\n')
-    statusFile.write('wait='+waitTime+'\n')
+    statusFile.write('wait='+str(waitTime)+'\n')
     statusFile.write('status='+doing+'\n')
     if target is not None: target=''
     statusFile.write('target='+target+'\n')
