@@ -395,9 +395,9 @@ def do_backup(v):
             shutil.rmtree(prefix+'0')
 
     if complete:
-        volume['status'] = status.SUCCEEDED
+        v['status'] = status.SUCCEEDED
     else: # not complete
-        volume['status'] = status.FAILED
+        v['status'] = status.FAILED
 
     log_debug('done')
 
