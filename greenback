@@ -112,7 +112,7 @@ def mkdir_p(path):
 
 #-----------------------------------------------------------
 
-def write_status(doing,target=None):
+def write_status(doing,waitTime,target):
     log_debug('writing status file')
     statusFileName = libdir+'/status'
     statusFile = file(statusFileName,'w')
@@ -120,9 +120,10 @@ def write_status(doing,target=None):
     statusFile.write('date='+datetime.datetime.strftime(now,'%Y-%m-%d')+'\n')
     statusFile.write('time='+datetime.datetime.strftime(now,'%H:%M:%S')+'\n')
     statusFile.write('pid='+str(os.getpid())+'\n')
+    statusFile.write('wait='+waitTime+'\n')
     statusFile.write('status='+doing+'\n')
-    if target is not None:
-        statusFile.write('target='+target+'\n')
+    if target is not None: target=''
+    statusFile.write('target='+target+'\n')
     (total, used, free) = disk_usage(topdir)
     statusFile.write('disk.mntpt='+topdir+'\n')
     statusFile.write('disk.total='+str(total)+'\n')
@@ -321,7 +322,7 @@ def tableToLogAndDisk(volumeInfo):
 
 def do_backup(v):
 
-    write_status('backup',v['index'])
+    write_status('backup',0,v['index'])
 
     args = [
         '-al',
@@ -382,7 +383,7 @@ def do_backup(v):
         # "touch" the timestamp
         os.utime(prefix+'0',None)
         # rotate the numbered backups
-        write_status('rotate',v['index'])
+        write_status('rotate',0,v['index'])
         if os.path.isdir(prefix+str(v['keepCount'])):
             log_debug('removing '+str(v['keepCount']))
             shutil.rmtree(prefix+str(v['keepCount']))
@@ -411,7 +412,7 @@ def do_backup(v):
 
 def do_single_pass():
 
-    write_status('thinking')
+    write_status('thinking',0,None)
     volumes = buildVolumeTable()
     tableToLogAndDisk(volumes)
 
@@ -424,13 +425,13 @@ def do_single_pass():
         do_backup(volume)
         tableToLogAndDisk(volumes)
 
-    write_status('idle')
+    write_status('idle',sleepMin,None)
     log_info('end of single pass')
 
     # sleep for a little bit
-    for i in range(1, sleepMin):
+    for i in range(sleepMin,1,-1):
         time.sleep(60)
-        write_status('idle')
+        write_status('idle',i,None)
         tableToLogAndDisk(volumes)
 
 #-----------------------------------------------------------
