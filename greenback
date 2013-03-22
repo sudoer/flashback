@@ -14,9 +14,15 @@ from configobj import ConfigObj         # apt-get install python-configobj
 import imp
 import errno
 
+
 class DefaultsClass:
     def __init__ (self, *argv, **argd):
         self.__dict__.update (argd)
+
+def enum(*sequential, **named):
+    enums = dict(zip(sequential, range(len(sequential))), **named)
+    return type('Enum', (), enums)
+
 
 # globals
 programName = 'greenback'
@@ -34,6 +40,7 @@ class defaults (DefaultsClass):
 # plumbing (globals)
 options = ()
 g_logFD = None
+status = enum('UNKNOWN', 'NOT_READY', 'READY', 'SUCCEEDED', 'FAILED', 'DISABLED')
 
 #-----------------------------------------------------------
 
@@ -139,43 +146,6 @@ def disk_usage(path):
 
 #-----------------------------------------------------------
 
-def formattedTable(volumes):
-    widths = { 'index':0, 'lastBackup':0, 'ageMin':0, 'cycleMin':0, 'status':0 }
-    for volume in volumes:
-        for fld in ('index','ageMin','cycleMin'):
-            widths[fld] = max(widths[fld], len(str(volume[fld])))
-    #widths['lastBackup'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
-    widths['lastBackup'] = len('2013-03-20 21:05:18')
-    widths['status'] = len('NEXT RUN 100d+23:59:59')
-
-    table = []
-    table.append(''
-        + 'INDEX'.center(widths['index'])            + '   '
-        + 'LAST BACKUP'.center(widths['lastBackup']) + '   '
-        + 'AGE'.center(widths['ageMin'])             + '/'
-        + 'CYCLE'.center(widths['cycleMin'])         + '   '
-        + 'STATUS'.center(widths['status'])
-    )
-
-    now = datetime.datetime.now()
-    for volume in volumes:
-        (d,h,m,s) = sec2dhms( volume['nextBackup'] * 60 )
-        status='READY'
-        if volume['ageMin'] < volume['cycleMin']:
-            status = 'NEXT RUN %dd+%d:%02d' % (d,h,m)
-        if volume['disabled']: status='DISABLED'
-        table.append(''
-            + volume['index'].ljust(widths['index'])            + '   '
-            + volume['lastBackup']                              + '   '
-            + str(volume['ageMin']).rjust(widths['ageMin'])     + '/'
-            + str(volume['cycleMin']).ljust(widths['cycleMin']) + '   '
-            + status.ljust(widths['status'])
-        )
-
-    return table
-
-#-----------------------------------------------------------
-
 def buildVolumeTable():
 
     volumeInfo = []
@@ -201,6 +171,7 @@ def buildVolumeTable():
 
         # set some defaults
         volume['lastBackup'] = defaults.lastBackup
+        volume['status'] = status.UNKNOWN
 
         configfiles=[]
         # (optional) config file from /backup/host/config
@@ -263,15 +234,61 @@ def buildVolumeTable():
     for volume in volumeInfo:
         lastBackup = datetime.datetime.strptime(volume['lastBackup'],'%Y-%m-%d %H:%M:%S')
         ageDelta = now - lastBackup
-        ageMin = (ageDelta.seconds // 60) + (ageDelta.days * 1440)
-        volume['ageMin'] = ageMin
-        nextBackup = volume['cycleMin'] - volume['ageMin']
-        if volume['disabled']: nextBackup = maxAge
-        volume['nextBackup'] = nextBackup
+        volume['ageMin'] = (ageDelta.seconds // 60) + (ageDelta.days * 1440)
+        volume['nextBackup'] = volume['cycleMin'] - volume['ageMin']
+        log_debug('index='+volume['index']+', nextBackup='+str(volume['nextBackup'])+'min')
+        # force disabled backups to the bottom of the list
+        if volume['disabled']: volume['nextBackup'] = maxAge
+
+    for volume in volumeInfo:
+        # If "cycleMin" has transpired since our last backup, we're "ready".
+        if volume['ageMin'] > volume['cycleMin']: volume['status'] = status.READY
+        else: volume['status'] = status.NOT_READY
+        # No matter if "ready" or not, if disabled, don't back up.
+        if volume['disabled']: volume['status'] = status.DISABLED
 
     sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('nextBackup'))
 
     return sortedVolumes
+
+#-----------------------------------------------------------
+
+def formattedTable(volumes):
+    widths = { 'index':0, 'lastBackup':0, 'ageMin':0, 'cycleMin':0 }
+    for volume in volumes:
+        for fld in ('index','ageMin','cycleMin'):
+            widths[fld] = max(widths[fld], len(str(volume[fld])))
+    #widths['lastBackup'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
+    widths['lastBackup'] = len('2013-03-20 21:05:18')
+
+    table = []
+    table.append(''
+        + 'INDEX'.center(widths['index'])            + '   '
+        + 'LAST BACKUP'.center(widths['lastBackup']) + '   '
+        + 'AGE'.center(widths['ageMin'])             + '/'
+        + 'CYCLE'.center(widths['cycleMin'])         + '   '
+        + 'STATUS')
+
+    now = datetime.datetime.now()
+    for volume in volumes:
+        (d,h,m,s) = sec2dhms( volume['nextBackup'] * 60 )
+        switch = {
+            status.UNKNOWN:   '???',
+            status.DISABLED:  'DISABLED',
+            status.NOT_READY: 'NEXT RUN %dd+%d:%02d' % (d,h,m),
+            status.READY:     'READY',
+            status.SUCCEEDED: 'SUCCEEDED',
+            status.FAILED:    'FAILED',
+        }
+        table.append(''
+            + volume['index'].ljust(widths['index'])            + '   '
+            + volume['lastBackup']                              + '   '
+            + str(volume['ageMin']).rjust(widths['ageMin'])     + '/'
+            + str(volume['cycleMin']).ljust(widths['cycleMin']) + '   '
+            + switch[volume['status']]
+        )
+
+    return table
 
 #-----------------------------------------------------------
 
@@ -377,6 +394,11 @@ def do_backup(v):
             log_debug('removing 0')
             shutil.rmtree(prefix+'0')
 
+    if complete:
+        volume['status'] = status.SUCCEEDED
+    else: # not complete
+        volume['status'] = status.FAILED
+
     log_debug('done')
 
     return 1 if complete else 0
@@ -396,11 +418,9 @@ def do_single_pass():
         if volume['ageMin'] < volume['cycleMin']: continue
         if volume['disabled']: continue
         count += do_backup(volume)
-    log_info('end of single pass')
-
-    if count > 0 :
-        volumes = buildVolumeTable()
         tableToLogAndDisk(volumes)
+
+    log_info('end of single pass')
 
 #-----------------------------------------------------------
 
