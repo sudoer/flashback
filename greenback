@@ -122,7 +122,7 @@ def write_status(doing,waitTime,target):
     statusFile.write('pid='+str(os.getpid())+'\n')
     statusFile.write('wait='+str(waitTime)+'\n')
     statusFile.write('status='+doing+'\n')
-    if target is not None: target=''
+    if target is None: target=''
     statusFile.write('target='+target+'\n')
     (total, used, free) = disk_usage(topdir)
     statusFile.write('disk.mntpt='+topdir+'\n')
