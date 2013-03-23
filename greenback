@@ -216,13 +216,14 @@ def buildVolumeTable():
         index = volume['host']+'-'+volume['name']
         volume['index'] = index
 
-        # set some defaults
+        # set some defaults - always
         volume['status'] = status.UNKNOWN
         volume['lastBackupTime'] = defaults.lastBackupTime
-        volume['label'] = defaults.label
-        volume['cycleSec'] = defaults.cycleSec
-        volume['keepCount'] = defaults.keepCount
-        volume['disabled'] = False
+        # set some defaults - only if not set in config.py (TODO: change this)
+        if 'label' not in volume: volume['label'] = defaults.label
+        if 'cycleSec' not in volume: volume['cycleSec'] = defaults.cycleSec
+        if 'keepCount' not in volume: volume['keepCount'] = defaults.keepCount
+        if 'disabled' not in volume: volume['disabled'] = False
 
         # build a list of several optional config files to look for
         configFiles=[]
