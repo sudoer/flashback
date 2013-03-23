@@ -1,5 +1,25 @@
 #!/usr/bin/python -B
 
+"""
+TODO LIST
+
+NOW
+~~~
+[?] snazzy name
+[ ] push to github
+[x] config files (global, per machine, per share)
+[x] use rsync instead of rsback
+[x] rotate backups myself
+[ ] store timestamps for each backup
+[x] plug-in to allow LED blinking
+[x] store status in a file
+[ ] second-level backups
+
+LATER
+~~~~~
+audit runs after backup, compares "new" and "large" files to yesterday's large files, compares md5, creates hard links
+"""
+
 import os
 import datetime
 import subprocess
