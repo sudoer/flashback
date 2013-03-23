@@ -48,13 +48,12 @@ def enum(*sequential, **named):
 programName = 'greenback'
 topdir = '/backup'
 libdir = '/var/lib/'+programName
-customize = ('src', 'cycleMin', 'disabled', 'label', 'keepCount')
 maxAge = 10000000
 sleepMin = 10
 # defaults (globals)
 class defaults (DefaultsClass):
     lastBackupTime = '2000-01-01 00:00:00'
-    cycleMin = 24*60
+    cycleSec = 24*60*60
     keepCount = 9
     label = 'daily'
 # plumbing (globals)
@@ -167,17 +166,46 @@ def disk_usage(path):
 
 #-----------------------------------------------------------
 
+def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
+    if cfgIdx not in cfgHash: return False
+    volHash[volIdx] = cfgHash[cfgIdx]
+    log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> STRING >> '+volIdx+'='+volHash[volIdx])
+    return True
+
+#-----------------------------------------------------------
+
+def setParmInt(cfgFile,cfgHash,cfgIdx,volHash,volIdx,multiplier=1):
+    if cfgIdx not in cfgHash: return False
+    volHash[volIdx] = int(cfgHash[cfgIdx]) * multiplier
+    log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> INT >> '+volIdx+'='+str(volHash[volIdx]))
+    return True
+
+#-----------------------------------------------------------
+
+def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
+    if cfgIdx not in cfgHash: return False
+    if cfgHash[cfgIdx].lower() in ['yes','y','true','1']:
+        log_debug('TRUE')
+        volHash[volIdx] = True
+    else:
+        log_debug('FALSE')
+        volHash[volIdx] = False
+    log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> BOOL >> '+volIdx+'='+( 'TRUE' if volHash[volIdx] else 'FALSE'))
+    return True
+
+#-----------------------------------------------------------
+
 def buildVolumeTable():
 
     volumeInfo = []
 
-    configfilename = topdir+'/config.py'
+    configFilename = topdir+'/config.py'
     try:
-        config = imp.load_source('config', configfilename)
-        log_debug("config file '"+configfilename+"' found")
+        config = imp.load_source('config', configFilename)
+        log_debug("config file '"+configFilename+"' found")
         volumeInfo = config.volumeInfo
     except ImportError:
-        log_debug("config file '"+configfilename+"' not found")
+        log_debug("config file '"+configFilename+"' not found")
         pass
 
     # FILL IN THE 'volumeInfo' DICTIONARY
@@ -189,44 +217,37 @@ def buildVolumeTable():
         volume['index'] = index
 
         # set some defaults
-        volume['lastBackupTime'] = defaults.lastBackupTime
         volume['status'] = status.UNKNOWN
+        volume['lastBackupTime'] = defaults.lastBackupTime
+        volume['label'] = defaults.label
+        volume['cycleSec'] = defaults.cycleSec
+        volume['keepCount'] = defaults.keepCount
+        volume['disabled'] = False
 
-        configfiles=[]
-        # (optional) config file from /backup/host/config
-        configfiles.append(topdir+'/'+volume['host']+'/config')
-        # (optional) config file from /backup/host/name/config
-        configfiles.append(topdir+'/'+volume['host']+'/'+volume['name']+'/config')
+        # build a list of several optional config files to look for
+        configFiles=[]
+        configFiles.append(topdir+'/config') # /backup/config
+        configFiles.append(topdir+'/'+volume['host']+'/config') # /backup/host/config
+        configFiles.append(topdir+'/'+volume['host']+'/'+volume['name']+'/config') # /backup/host/name/config
 
-        for configfile in configfiles:
+        for configFile in configFiles:
             # read the config files if they exist
-            if os.path.isfile(configfile):
-                log_info("reading config file '"+configfile+"'")
-                config = ConfigObj(configfile)
-                # if these options are set in the config file, use them
-                for key in customize:
-                    if key in config:
-                        log_info(' - '+index+': '+key+'='+config[key])
-                        volume[key] = config[key]
+            if os.path.isfile(configFile):
+                log_debug("reading config file '"+configFile+"'")
+                config = ConfigObj(configFile)
+                # STRING OPTIONS
+                setParmString(configFile,config,'src',volume,'src')
+                setParmString(configFile,config,'label',volume,'label')
+                # NUMBER OPTIONS
+                setParmInt(configFile,config,'cycleDay',volume,'cycleSec',86400)
+                setParmInt(configFile,config,'cycleHour',volume,'cycleSec',3600)
+                setParmInt(configFile,config,'cycleMin',volume,'cycleSec',60)
+                setParmInt(configFile,config,'cycleSec',volume,'cycleSec')
+                setParmInt(configFile,config,'keepCount',volume,'keepCount')
+                # BOOLEAN OPTIONS
+                setParmBool(configFile,config,'disabled',volume,'disabled')
             else:
-                log_debug("no config file '"+configfile+"'")
-
-        # if these options are not defined anywhere else, assign defaults
-        if 'label' not in volume: volume['label'] = defaults.label
-        if 'cycleMin' not in volume: volume['cycleMin'] = defaults.cycleMin
-        if 'disabled' not in volume: volume['disabled'] = False
-        if 'keepCount' not in volume: volume['keepCount'] = defaults.keepCount
-
-        # force proper formats
-        if isinstance(volume['cycleMin'], basestring):
-            volume['cycleMin'] = int(volume['cycleMin'])
-        if isinstance(volume['keepCount'], basestring):
-            volume['keepCount'] = int(volume['keepCount'])
-        if isinstance(volume['disabled'], basestring):
-            if volume['disabled'].lower in ('yes','y','true','1'):
-                volume['disabled'] = True
-            else:
-                volume['disabled'] = False
+                log_debug("no config file '"+configFile+"'")
 
     # LOOK AT RECENT BACKUPS
 
@@ -251,35 +272,42 @@ def buildVolumeTable():
             log_debug('host='+host+', name='+name+', lastBackupTime='+lastBackupTime+', '+host+'-'+name+' is not in the list of volumes')
             pass
 
+    return volumeInfo
+
+#-----------------------------------------------------------
+
+def updateAgesAndSort(volumeInfo):
+
     # GO THROUGH THE LIST IN ORDER, DETERMINE THEIR AGES AND NEXT BACKUP TIME
 
     now = datetime.datetime.now()
     for volume in volumeInfo:
         lastBackupTime = datetime.datetime.strptime(volume['lastBackupTime'],'%Y-%m-%d %H:%M:%S')
         ageDelta = now - lastBackupTime
-        volume['ageMin'] = (ageDelta.seconds // 60) + (ageDelta.days * 1440)
-        volume['nextBackupMin'] = volume['cycleMin'] - volume['ageMin']
-        log_debug('index='+volume['index']+', nextBackupMin='+str(volume['nextBackupMin'])+'min')
+        volume['ageSec'] = ageDelta.seconds + (ageDelta.days * 1440)
+        volume['nextBackupSec'] = volume['cycleSec'] - volume['ageSec']
+        log_debug('index='+volume['index']+', nextBackupSec='+str(volume['nextBackupSec'])+'min')
         # force disabled backups to the bottom of the list
-        if volume['disabled']: volume['nextBackupMin'] = maxAge
+        if volume['disabled']: volume['nextBackupSec'] = maxAge
 
     for volume in volumeInfo:
-        # If "cycleMin" has transpired since our last backup, we're "ready".
-        if volume['ageMin'] > volume['cycleMin']: volume['status'] = status.READY
-        else: volume['status'] = status.NOT_READY
+        if volume['status'] in (status.NOT_READY, status.UNKNOWN):
+            # If "cycleSec" has transpired since our last backup, we're "ready".
+            if volume['ageSec'] > volume['cycleSec']: volume['status'] = status.READY
+            else: volume['status'] = status.NOT_READY
         # No matter if "ready" or not, if disabled, don't back up.
         if volume['disabled']: volume['status'] = status.DISABLED
 
-    sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('nextBackupMin'))
+    sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('nextBackupSec'))
 
     return sortedVolumes
 
 #-----------------------------------------------------------
 
 def formattedTable(volumes):
-    widths = { 'index':0, 'lastBackupTime':0, 'ageMin':0, 'cycleMin':0 }
+    widths = { 'index':0, 'lastBackupTime':0, 'ageSec':0, 'cycleSec':0 }
     for volume in volumes:
-        for fld in ('index','ageMin','cycleMin'):
+        for fld in ('index','ageSec','cycleSec'):
             widths[fld] = max(widths[fld], len(str(volume[fld])))
     #widths['lastBackupTime'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
     widths['lastBackupTime'] = len('2013-03-20 21:05:18')
@@ -288,17 +316,17 @@ def formattedTable(volumes):
     table.append(''
         + 'INDEX'.center(widths['index'])                + '   '
         + 'LAST BACKUP'.center(widths['lastBackupTime']) + '   '
-        + 'AGE'.center(widths['ageMin'])                 + '/'
-        + 'CYCLE'.center(widths['cycleMin'])             + '   '
+        + 'AGE'.center(widths['ageSec'])                 + '/'
+        + 'CYCLE'.center(widths['cycleSec'])             + '   '
         + 'STATUS')
 
     now = datetime.datetime.now()
     for volume in volumes:
-        (d,h,m,s) = sec2dhms( volume['nextBackupMin'] * 60 )
+        (d,h,m,s) = sec2dhms( volume['nextBackupSec'] )
         switch = {
             status.UNKNOWN:   '???',
             status.DISABLED:  'DISABLED',
-            status.NOT_READY: 'NEXT RUN %dd+%d:%02d' % (d,h,m),
+            status.NOT_READY: 'NEXT RUN %dd+%d:%02d:%02d' % (d,h,m,s),
             status.READY:     'READY',
             status.SUCCEEDED: 'SUCCEEDED',
             status.FAILED:    'FAILED',
@@ -306,8 +334,8 @@ def formattedTable(volumes):
         table.append(''
             + volume['index'].ljust(widths['index'])            + '   '
             + volume['lastBackupTime']                          + '   '
-            + str(volume['ageMin']).rjust(widths['ageMin'])     + '/'
-            + str(volume['cycleMin']).ljust(widths['cycleMin']) + '   '
+            + str(volume['ageSec']).rjust(widths['ageSec'])     + '/'
+            + str(volume['cycleSec']).ljust(widths['cycleSec']) + '   '
             + switch[volume['status']]
         )
 
@@ -315,7 +343,7 @@ def formattedTable(volumes):
 
 #-----------------------------------------------------------
 
-def tableToLogAndDisk(volumeInfo):
+def tableToLogAndDisk(activity,volumeInfo):
 
     # CREATE A FORMATTED TABLE
 
@@ -325,7 +353,8 @@ def tableToLogAndDisk(volumeInfo):
 
     tableFileName = libdir+'/queue'
     tableFile = file(tableFileName,'w')
-    tableFile.write(datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')+'\n')
+    date = datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')
+    tableFile.write(date+' : '+activity+'\n')
     tableFile.write('\n')
     for line in table:
         tableFile.write(line+'\n')
@@ -434,23 +463,25 @@ def do_single_pass():
 
     write_status('thinking',0,None)
     volumes = buildVolumeTable()
-    tableToLogAndDisk(volumes)
+    volumes = updateAgesAndSort(volumes)
+    tableToLogAndDisk('thinking',volumes)
 
     # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
 
     log_info('start of single pass')
     for volume in volumes:
-        if volume['ageMin'] < volume['cycleMin']: continue
+        if volume['ageSec'] < volume['cycleSec']: continue
         if volume['disabled']: continue
+        tableToLogAndDisk('backing up', volumes)
         do_backup(volume)
-        tableToLogAndDisk(volumes)
 
     log_info('end of single pass')
 
     # sleep for a little bit
     for i in range(sleepMin,0,-1):
         write_status('idle',i,None)
-        tableToLogAndDisk(volumes)
+        volumes = updateAgesAndSort(volumes)
+        tableToLogAndDisk('sleeping '+str(i)+' min',volumes)
         time.sleep(60)
 
 #-----------------------------------------------------------
