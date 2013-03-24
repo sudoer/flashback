@@ -10,10 +10,12 @@ NOW
 [x] config files (global, per machine, per share)
 [x] use rsync instead of rsback
 [x] rotate backups myself
-[ ] store timestamps for each backup
+[ ] write summary info to a per-backup status/history file
 [x] plug-in to allow LED blinking
 [x] store status in a file
 [ ] second-level backups
+[ ] failures still update timestamp
+[ ] debian package
 
 LATER
 ~~~~~
@@ -52,7 +54,7 @@ maxAge = 10000000
 sleepMin = 10
 # defaults (globals)
 class defaults (DefaultsClass):
-    lastBackupTime = '2000-01-01 00:00:00'
+    lastBackupTimestamp = 0
     cycleSec = 24*60*60
     keepCount = 9
     label = 'daily'
@@ -218,7 +220,8 @@ def buildVolumeTable():
 
         # set some defaults - always
         volume['status'] = status.UNKNOWN
-        volume['lastBackupTime'] = defaults.lastBackupTime
+        volume['lastBackupTimestamp'] = defaults.lastBackupTimestamp
+        volume['lastBackupDurationSec'] = 0
         # set some defaults - only if not set in config.py (TODO: change this)
         if 'label' not in volume: volume['label'] = defaults.label
         if 'cycleSec' not in volume: volume['cycleSec'] = defaults.cycleSec
@@ -263,14 +266,14 @@ def buildVolumeTable():
         # Get the creation time of the daily.1 directory.
         # Note: ctime() does not refer to creation time on *nix systems,
         # but rather the last time the inode data changed.
-        lastBackupTime = time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(os.path.getmtime(recentBackup)))
+        lastBackupTimestamp = datetime.datetime.fromtimestamp(os.path.getmtime(recentBackup))
         # find the volumeInfo line that contains key='host-name'
         try:
             idx = map(operator.itemgetter('index'), volumeInfo).index(host+'-'+name)
-            log_debug('host='+host+', name='+name+', lastBackupTime='+lastBackupTime+', '+host+'-'+name+' is in slot %d'%idx)
-            volumeInfo[idx]['lastBackupTime'] = lastBackupTime
+            log_debug('host='+host+', name='+name+', '+host+'-'+name+' is in slot %d'%idx)
+            volumeInfo[idx]['lastBackupTimestamp'] = lastBackupTimestamp
         except ValueError:
-            log_debug('host='+host+', name='+name+', lastBackupTime='+lastBackupTime+', '+host+'-'+name+' is not in the list of volumes')
+            log_debug('host='+host+', name='+name+', '+host+'-'+name+' is not in the list of volumes')
             pass
 
     return volumeInfo
@@ -283,11 +286,10 @@ def updateAgesAndSort(volumeInfo):
 
     now = datetime.datetime.now()
     for volume in volumeInfo:
-        lastBackupTime = datetime.datetime.strptime(volume['lastBackupTime'],'%Y-%m-%d %H:%M:%S')
-        ageDelta = now - lastBackupTime
+        ageDelta = now - volume['lastBackupTimestamp']
         volume['ageSec'] = ageDelta.seconds + (ageDelta.days * 1440)
         volume['nextBackupSec'] = volume['cycleSec'] - volume['ageSec']
-        log_debug('index='+volume['index']+', nextBackupSec='+str(volume['nextBackupSec'])+'min')
+        log_debug('index='+volume['index']+', nextBackupSec='+str(volume['nextBackupSec'])+'sec')
         # force disabled backups to the bottom of the list
         if volume['disabled']: volume['nextBackupSec'] = maxAge
 
@@ -306,35 +308,39 @@ def updateAgesAndSort(volumeInfo):
 #-----------------------------------------------------------
 
 def formattedTable(volumes):
-    widths = { 'index':0, 'lastBackupTime':0, 'ageSec':0, 'cycleSec':0 }
+    widths = { 'index':0, 'lastBackupTimestamp':0, 'ageSec':0, 'cycleSec':0 }
     for volume in volumes:
         for fld in ('index','ageSec','cycleSec'):
             widths[fld] = max(widths[fld], len(str(volume[fld])))
-    #widths['lastBackupTime'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
-    widths['lastBackupTime'] = len('2013-03-20 21:05:18')
+    #widths['lastBackupTimestamp'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
+    widths['lastBackupTimestamp'] = len('2013-03-20 21:05:18')
 
     table = []
     table.append(''
-        + 'INDEX'.center(widths['index'])                + '   '
-        + 'LAST BACKUP'.center(widths['lastBackupTime']) + '   '
-        + 'AGE'.center(widths['ageSec'])                 + '/'
-        + 'CYCLE'.center(widths['cycleSec'])             + '   '
+        + 'INDEX'.center(widths['index'])                     + '   '
+        + 'LAST BACKUP'.center(widths['lastBackupTimestamp']) + '   '
+        + 'AGE'.center(widths['ageSec'])                      + '/'
+        + 'CYCLE'.center(widths['cycleSec'])                  + '   '
         + 'STATUS')
 
     now = datetime.datetime.now()
     for volume in volumes:
         (d,h,m,s) = sec2dhms( volume['nextBackupSec'] )
+        nextBackupInterval = '%dd+%d:%02d:%02d' % (d,h,m,s)
+        (d,h,m,s) = sec2dhms( volume['lastBackupDurationSec'] )  # assume 0 days
+        lastBackupDurationSec = '%d:%02d:%02d' % (h,m,s)
         switch = {
             status.UNKNOWN:   '???',
             status.DISABLED:  'DISABLED',
-            status.NOT_READY: 'NEXT RUN %dd+%d:%02d:%02d' % (d,h,m,s),
+            status.NOT_READY: 'NEXT RUN IN '+nextBackupInterval,
             status.READY:     'READY',
-            status.SUCCEEDED: 'SUCCEEDED',
-            status.FAILED:    'FAILED',
+            status.SUCCEEDED: 'SUCCEEDED ('+lastBackupDurationSec+')',
+            status.FAILED:    'FAILED ('+lastBackupDurationSec+')',
         }
+        lastBackupTimestampString = volume['lastBackupTimestamp'].strftime('%Y-%m-%d %H:%M:%S')
         table.append(''
             + volume['index'].ljust(widths['index'])            + '   '
-            + volume['lastBackupTime']                          + '   '
+            + lastBackupTimestampString                         + '   '
             + str(volume['ageSec']).rjust(widths['ageSec'])     + '/'
             + str(volume['cycleSec']).ljust(widths['cycleSec']) + '   '
             + switch[volume['status']]
@@ -398,7 +404,9 @@ def do_backup(v):
 
     cmd = ['/usr/bin/rsync'] + args + [src, dest]
     log_info('running >> '+(','.join(cmd)))
+    startTime = datetime.datetime.now()
     rc = shell_do(cmd)
+    endTime = datetime.datetime.now()
 
     #   0      Success
     #   1      Syntax or usage error
@@ -453,6 +461,7 @@ def do_backup(v):
         v['status'] = status.SUCCEEDED
     else: # not complete
         v['status'] = status.FAILED
+    v['lastBackupDurationSec'] = (endTime - startTime).seconds
 
     log_debug('done')
 
