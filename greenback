@@ -483,7 +483,7 @@ def do_single_pass():
     for volume in volumes:
         if volume['ageSec'] < volume['cycleSec']: continue
         if volume['disabled']: continue
-        tableToLogAndDisk('backing up', volumes)
+        tableToLogAndDisk("backing up '"+volume['index']+"'", volumes)
         do_backup(volume)
 
     log_info('end of single pass')
