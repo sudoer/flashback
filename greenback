@@ -287,7 +287,7 @@ def updateAgesAndSort(volumeInfo):
     now = datetime.datetime.now()
     for volume in volumeInfo:
         ageDelta = now - volume['lastBackupTimestamp']
-        volume['ageSec'] = ageDelta.seconds + (ageDelta.days * 1440)
+        volume['ageSec'] = ageDelta.seconds + (ageDelta.days * 86400)
         volume['nextBackupSec'] = volume['cycleSec'] - volume['ageSec']
         log_debug('index='+volume['index']+', nextBackupSec='+str(volume['nextBackupSec'])+'sec')
         # force disabled backups to the bottom of the list
