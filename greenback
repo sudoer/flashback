@@ -355,12 +355,12 @@ def tableToLogAndDisk(activity,volumeInfo):
     # CREATE A FORMATTED TABLE
 
     table = formattedTable(volumeInfo)
+    date = datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')
 
     # DUMP THE SORTED LIST IN A TEXT FILE
 
     tableFileName = libdir+'/queue'
     tableFile = file(tableFileName,'w')
-    date = datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')
     tableFile.write(date+' : '+activity+'\n')
     tableFile.write('\n')
     for line in table:
@@ -370,6 +370,7 @@ def tableToLogAndDisk(activity,volumeInfo):
     # SHOW THE SORTED LIST IN THE LOG
 
     log_info('volumes:')
+    log_info(date+' : '+activity)
     for line in table:
         log_info(line)
     log_info('')
