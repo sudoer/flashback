@@ -6,16 +6,21 @@ TODO LIST
 NOW
 ~~~
 [?] snazzy name
-[ ] push to github
 [x] config files (global, per machine, per share)
 [x] use rsync instead of rsback
 [x] rotate backups myself
-[ ] write summary info to a per-backup status/history file
 [x] plug-in to allow LED blinking
 [x] store status in a file
+[x] debian package
+[ ] push to github
+[ ] write summary info to a per-backup status/history file (sqlite?)
 [ ] second-level backups
 [ ] bug?? : failures still update timestamp
-[ ] debian package
+[ ] install monitor.sh in examples
+[ ] test start/stop/install/uninstall
+[ ] top-level config file - change from import to config format
+[ ] top-level config file - move to /etc
+[ ] config file - user-defined "topdir"
 
 LATER
 ~~~~~
