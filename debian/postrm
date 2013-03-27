@@ -1,0 +1,14 @@
+#!/bin/sh
+
+#set -e  <-- bomb on errors... this options sucks
+
+case "$1" in
+  purge)
+    rm -rf /var/lib/greenback 2> /dev/null
+    rm -f /var/run/greenback.pid 2> /dev/null
+    #rm -f /var/log/greenback.log 2> /dev/null
+    ;;
+esac
+
+exit 0
+
