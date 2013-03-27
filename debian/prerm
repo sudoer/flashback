@@ -1,3 +1,4 @@
+#!/bin/sh
 
 if [ -x "/etc/init.d/greenback" ]; then
     invoke-rc.d greenback stop || exit $?
