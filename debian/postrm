@@ -7,6 +7,7 @@ case "$1" in
     rm -rf /var/lib/greenback 2> /dev/null
     rm -f /var/run/greenback.pid 2> /dev/null
     #rm -f /var/log/greenback.log 2> /dev/null
+    update-rc.d greenback remove >/dev/null
     ;;
 esac
 

@@ -1,0 +1,8 @@
+
+if [ -x "/etc/init.d/greenback" ]; then
+    if [ ! -e "/etc/init/greenback.conf" ]; then
+        update-rc.d greenback defaults >/dev/null
+    fi
+    invoke-rc.d greenback start || exit $?
+fi
+
