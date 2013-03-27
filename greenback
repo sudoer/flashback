@@ -14,7 +14,7 @@ NOW
 [x] plug-in to allow LED blinking
 [x] store status in a file
 [ ] second-level backups
-[ ] failures still update timestamp
+[ ] bug?? : failures still update timestamp
 [ ] debian package
 
 LATER
@@ -85,6 +85,7 @@ def log_debug(string):
 #-----------------------------------------------------------
 
 def log_info(string):
+    if options.quiet: return
     global g_logFD
     timeStamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     g_logFD.write(timeStamp+" "+string+"\n")
@@ -369,7 +370,6 @@ def tableToLogAndDisk(activity,volumeInfo):
 
     # SHOW THE SORTED LIST IN THE LOG
 
-    log_info('volumes:')
     log_info(date+' : '+activity)
     for line in table:
         log_info(line)
@@ -386,10 +386,10 @@ def do_backup(v):
         '-E',
         '--delete',
         '--delete-excluded',
-#       '--stats',
         '--numeric-ids',
         '--one-file-system',
 #       '-v',
+#       '--stats',
         '--link-dest='+topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.1',
     ]
 
@@ -406,7 +406,7 @@ def do_backup(v):
     cmd = ['/usr/bin/rsync'] + args + [src, dest]
     log_info('running >> '+(','.join(cmd)))
     startTime = datetime.datetime.now()
-    rc = shell_do(cmd)
+    (rc,stdout,stderr) = shell_capture(cmd)
     endTime = datetime.datetime.now()
 
     #   0      Success
@@ -504,6 +504,7 @@ def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage)
     parser.add_option("-d", "--debug", action="store_true", dest="debug")
+    parser.add_option("-q", "--quiet", action="store_true", dest="quiet")
     global options
     (options, args) = parser.parse_args()
     if len(args) != 0:
