@@ -59,7 +59,7 @@ maxAge = 10000000
 sleepMin = 10
 # defaults (globals)
 class defaults (DefaultsClass):
-    lastBackupTimestamp = 0
+    lastBackupTimestamp = datetime.datetime(1970,1,1)
     cycleSec = 24*60*60
     keepCount = 9
     label = 'daily'
