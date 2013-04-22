@@ -37,19 +37,49 @@ import sys
 from optparse import OptionParser
 import time
 import shutil
-from configobj import ConfigObj         # apt-get install python-configobj
+# from configobj import ConfigObj         # apt-get install python-configobj
 import imp
 import errno
+import ConfigParser
 
+
+#===========================================================
 
 class DefaultsClass:
     def __init__ (self, *argv, **argd):
         self.__dict__.update (argd)
 
+#-----------------------------------------------------------
+
 def enum(*sequential, **named):
     enums = dict(zip(sequential, range(len(sequential))), **named)
     return type('Enum', (), enums)
 
+#-----------------------------------------------------------
+
+class FakeSecHead(object):
+    def __init__(self, fp):
+        self.fp = fp
+        self.sechead = '[fake]\n'
+    def readline(self):
+        if self.sechead:
+            try: return self.sechead
+            finally: self.sechead = None
+        else: return self.fp.readline()
+
+#-----------------------------------------------------------
+
+def cfgfile_to_dict(filename):
+    file = open(filename) # , encoding="utf_8")
+    config = ConfigParser.ConfigParser()
+    #config.read_file(add_section_header(file, 'dummy'), source=filename)
+    config.readfp(FakeSecHead(open(filename)))
+    aDict={}
+    for aTuple in config.items('fake'):
+        aDict[aTuple[0]]=aTuple[1]
+    return aDict
+
+#===========================================================
 
 # globals
 programName = 'greenback'
@@ -244,7 +274,7 @@ def buildJobTable():
             # read the config files if they exist
             if os.path.isfile(configFile):
                 log_debug("reading config file '"+configFile+"'")
-                config = ConfigObj(configFile)
+                config = cfgfile_to_dict(configFile)
                 # STRING OPTIONS
                 setParmString(configFile,config,'src',job,'src')
                 setParmString(configFile,config,'label',job,'label')
