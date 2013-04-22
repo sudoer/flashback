@@ -203,42 +203,42 @@ def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
 
 #-----------------------------------------------------------
 
-def buildVolumeTable():
+def buildJobTable():
 
-    volumeInfo = []
+    jobInfo = []
 
     configFilename = topdir+'/config.py'
     try:
         config = imp.load_source('config', configFilename)
         log_debug("config file '"+configFilename+"' found")
-        volumeInfo = config.volumeInfo
+        jobInfo = config.jobInfo
     except ImportError:
         log_debug("config file '"+configFilename+"' not found")
         pass
 
-    # FILL IN THE 'volumeInfo' DICTIONARY
+    # FILL IN THE 'jobInfo' DICTIONARY
 
-    for volume in volumeInfo:
+    for job in jobInfo:
 
         # set an index to refer to this entry by
-        index = volume['host']+'-'+volume['name']
-        volume['index'] = index
+        index = job['host']+'-'+job['volume']
+        job['index'] = index
 
         # set some defaults - always
-        volume['status'] = status.UNKNOWN
-        volume['lastBackupTimestamp'] = defaults.lastBackupTimestamp
-        volume['lastBackupDurationSec'] = 0
+        job['status'] = status.UNKNOWN
+        job['lastBackupTimestamp'] = defaults.lastBackupTimestamp
+        job['lastBackupDurationSec'] = 0
         # set some defaults - only if not set in config.py (TODO: change this)
-        if 'label' not in volume: volume['label'] = defaults.label
-        if 'cycleSec' not in volume: volume['cycleSec'] = defaults.cycleSec
-        if 'keepCount' not in volume: volume['keepCount'] = defaults.keepCount
-        if 'disabled' not in volume: volume['disabled'] = False
+        if 'label' not in job: job['label'] = defaults.label
+        if 'cycleSec' not in job: job['cycleSec'] = defaults.cycleSec
+        if 'keepCount' not in job: job['keepCount'] = defaults.keepCount
+        if 'disabled' not in job: job['disabled'] = False
 
         # build a list of several optional config files to look for
         configFiles=[]
         configFiles.append(topdir+'/config') # /backup/config
-        configFiles.append(topdir+'/'+volume['host']+'/config') # /backup/host/config
-        configFiles.append(topdir+'/'+volume['host']+'/'+volume['name']+'/config') # /backup/host/name/config
+        configFiles.append(topdir+'/'+job['host']+'/config') # /backup/host/config
+        configFiles.append(topdir+'/'+job['host']+'/'+job['volume']+'/config') # /backup/host/volume/config
 
         for configFile in configFiles:
             # read the config files if they exist
@@ -246,16 +246,16 @@ def buildVolumeTable():
                 log_debug("reading config file '"+configFile+"'")
                 config = ConfigObj(configFile)
                 # STRING OPTIONS
-                setParmString(configFile,config,'src',volume,'src')
-                setParmString(configFile,config,'label',volume,'label')
+                setParmString(configFile,config,'src',job,'src')
+                setParmString(configFile,config,'label',job,'label')
                 # NUMBER OPTIONS
-                setParmInt(configFile,config,'cycleDay',volume,'cycleSec',86400)
-                setParmInt(configFile,config,'cycleHour',volume,'cycleSec',3600)
-                setParmInt(configFile,config,'cycleMin',volume,'cycleSec',60)
-                setParmInt(configFile,config,'cycleSec',volume,'cycleSec')
-                setParmInt(configFile,config,'keepCount',volume,'keepCount')
+                setParmInt(configFile,config,'cycleDay',job,'cycleSec',86400)
+                setParmInt(configFile,config,'cycleHour',job,'cycleSec',3600)
+                setParmInt(configFile,config,'cycleMin',job,'cycleSec',60)
+                setParmInt(configFile,config,'cycleSec',job,'cycleSec')
+                setParmInt(configFile,config,'keepCount',job,'keepCount')
                 # BOOLEAN OPTIONS
-                setParmBool(configFile,config,'disabled',volume,'disabled')
+                setParmBool(configFile,config,'disabled',job,'disabled')
             else:
                 log_debug("no config file '"+configFile+"'")
 
@@ -268,56 +268,56 @@ def buildVolumeTable():
         junk1, junk2, right = recentBackup.partition(topdir)
         pathpieces = right.split('/')
         host = pathpieces[1]
-        name = pathpieces[2]
+        volume = pathpieces[2]
         # Get the creation time of the daily.1 directory.
         # Note: ctime() does not refer to creation time on *nix systems,
         # but rather the last time the inode data changed.
         lastBackupTimestamp = datetime.datetime.fromtimestamp(os.path.getmtime(recentBackup))
-        # find the volumeInfo line that contains key='host-name'
+        # find the jobInfo line that contains key='host-volume'
         try:
-            idx = map(operator.itemgetter('index'), volumeInfo).index(host+'-'+name)
-            log_debug('host='+host+', name='+name+', '+host+'-'+name+' is in slot %d'%idx)
-            volumeInfo[idx]['lastBackupTimestamp'] = lastBackupTimestamp
+            idx = map(operator.itemgetter('index'), jobInfo).index(host+'-'+volume)
+            log_debug('host='+host+', volume='+volume+', '+host+'-'+volume+' is in slot %d'%idx)
+            jobInfo[idx]['lastBackupTimestamp'] = lastBackupTimestamp
         except ValueError:
-            log_debug('host='+host+', name='+name+', '+host+'-'+name+' is not in the list of volumes')
+            log_debug('host='+host+', volume='+volume+', '+host+'-'+volume+' is not in the list of jobs')
             pass
 
-    return volumeInfo
+    return jobInfo
 
 #-----------------------------------------------------------
 
-def updateAgesAndSort(volumeInfo):
+def updateAgesAndSort(jobInfo):
 
     # GO THROUGH THE LIST IN ORDER, DETERMINE THEIR AGES AND NEXT BACKUP TIME
 
     now = datetime.datetime.now()
-    for volume in volumeInfo:
-        ageDelta = now - volume['lastBackupTimestamp']
-        volume['ageSec'] = ageDelta.seconds + (ageDelta.days * 86400)
-        volume['nextBackupSec'] = volume['cycleSec'] - volume['ageSec']
-        log_debug('index='+volume['index']+', nextBackupSec='+str(volume['nextBackupSec'])+'sec')
+    for job in jobInfo:
+        ageDelta = now - job['lastBackupTimestamp']
+        job['ageSec'] = ageDelta.seconds + (ageDelta.days * 86400)
+        job['nextBackupSec'] = job['cycleSec'] - job['ageSec']
+        log_debug('index='+job['index']+', nextBackupSec='+str(job['nextBackupSec'])+'sec')
         # force disabled backups to the bottom of the list
-        if volume['disabled']: volume['nextBackupSec'] = maxAge
+        if job['disabled']: job['nextBackupSec'] = maxAge
 
-    for volume in volumeInfo:
-        if volume['status'] in (status.NOT_READY, status.UNKNOWN):
+    for job in jobInfo:
+        if job['status'] in (status.NOT_READY, status.UNKNOWN):
             # If "cycleSec" has transpired since our last backup, we're "ready".
-            if volume['ageSec'] > volume['cycleSec']: volume['status'] = status.READY
-            else: volume['status'] = status.NOT_READY
+            if job['ageSec'] > job['cycleSec']: job['status'] = status.READY
+            else: job['status'] = status.NOT_READY
         # No matter if "ready" or not, if disabled, don't back up.
-        if volume['disabled']: volume['status'] = status.DISABLED
+        if job['disabled']: job['status'] = status.DISABLED
 
-    sortedVolumes = sorted(volumeInfo, key=operator.itemgetter('nextBackupSec'))
+    sortedJobs = sorted(jobInfo, key=operator.itemgetter('nextBackupSec'))
 
-    return sortedVolumes
+    return sortedJobs
 
 #-----------------------------------------------------------
 
-def formattedTable(volumes):
+def formattedTable(jobs):
     widths = { 'index':0, 'lastBackupTimestamp':0, 'ageSec':0, 'cycleSec':0 }
-    for volume in volumes:
+    for job in jobs:
         for fld in ('index','ageSec','cycleSec'):
-            widths[fld] = max(widths[fld], len(str(volume[fld])))
+            widths[fld] = max(widths[fld], len(str(job[fld])))
     #widths['lastBackupTimestamp'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
     widths['lastBackupTimestamp'] = len('2013-03-20 21:05:18')
 
@@ -330,10 +330,10 @@ def formattedTable(volumes):
         + 'STATUS')
 
     now = datetime.datetime.now()
-    for volume in volumes:
-        (d,h,m,s) = sec2dhms( volume['nextBackupSec'] )
+    for job in jobs:
+        (d,h,m,s) = sec2dhms( job['nextBackupSec'] )
         nextBackupInterval = '%dd+%d:%02d:%02d' % (d,h,m,s)
-        (d,h,m,s) = sec2dhms( volume['lastBackupDurationSec'] )  # assume 0 days
+        (d,h,m,s) = sec2dhms( job['lastBackupDurationSec'] )  # assume 0 days
         lastBackupDurationSec = '%d:%02d:%02d' % (h,m,s)
         switch = {
             status.UNKNOWN:   '???',
@@ -343,24 +343,24 @@ def formattedTable(volumes):
             status.SUCCEEDED: 'SUCCEEDED ('+lastBackupDurationSec+')',
             status.FAILED:    'FAILED ('+lastBackupDurationSec+')',
         }
-        lastBackupTimestampString = volume['lastBackupTimestamp'].strftime('%Y-%m-%d %H:%M:%S')
+        lastBackupTimestampString = job['lastBackupTimestamp'].strftime('%Y-%m-%d %H:%M:%S')
         table.append(''
-            + volume['index'].ljust(widths['index'])            + '   '
+            + job['index'].ljust(widths['index'])            + '   '
             + lastBackupTimestampString                         + '   '
-            + str(volume['ageSec']).rjust(widths['ageSec'])     + '/'
-            + str(volume['cycleSec']).ljust(widths['cycleSec']) + '   '
-            + switch[volume['status']]
+            + str(job['ageSec']).rjust(widths['ageSec'])     + '/'
+            + str(job['cycleSec']).ljust(widths['cycleSec']) + '   '
+            + switch[job['status']]
         )
 
     return table
 
 #-----------------------------------------------------------
 
-def tableToLogAndDisk(activity,volumeInfo):
+def tableToLogAndDisk(activity,jobInfo):
 
     # CREATE A FORMATTED TABLE
 
-    table = formattedTable(volumeInfo)
+    table = formattedTable(jobInfo)
     date = datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')
 
     # DUMP THE SORTED LIST IN A TEXT FILE
@@ -382,9 +382,9 @@ def tableToLogAndDisk(activity,volumeInfo):
 
 #-----------------------------------------------------------
 
-def do_backup(v):
+def do_backup(job):
 
-    write_status('backup',0,v['index'])
+    write_status('backup',0,job['index'])
 
     args = [
         '-al',
@@ -395,14 +395,14 @@ def do_backup(v):
         '--one-file-system',
 #       '-v',
 #       '--stats',
-        '--link-dest='+topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.1',
+        '--link-dest='+topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1',
     ]
 
-    src = v['src']
-    dest = topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.0'
+    src = job['src']
+    dest = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
 
     # optional - "excludes" file
-    excludes = topdir+'/'+v['host']+'/'+v['name']+'/excludes'
+    excludes = topdir+'/'+job['host']+'/'+job['volume']+'/excludes'
     log_debug('testing for ['+excludes+']')
     if os.path.isfile(excludes):
         log_debug('"excludes" file found, adding argument')
@@ -437,37 +437,37 @@ def do_backup(v):
     complete = True if rc in (0, 24) else False
     log_debug('rc = %d, '%rc)
 
-    prefix = topdir+'/'+v['host']+'/'+v['name']+'/'+v['label']+'.'
+    prefix = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
     if os.path.isdir(prefix+'0') == False:
         log_debug(prefix+'0 directory was not found, marking incomplete')
         complete = False
 
     if complete:
-        log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
+        log_debug('backup of '+job['host']+'/'+job['volume']+' is complete')
         # "touch" the timestamp
         os.utime(prefix+'0',None)
         # rotate the numbered backups
-        write_status('rotate',0,v['index'])
-        if os.path.isdir(prefix+str(v['keepCount'])):
-            log_debug('removing '+str(v['keepCount']))
-            shutil.rmtree(prefix+str(v['keepCount']))
+        write_status('rotate',0,job['index'])
+        if os.path.isdir(prefix+str(job['keepCount'])):
+            log_debug('removing '+str(job['keepCount']))
+            shutil.rmtree(prefix+str(job['keepCount']))
         rotates=[]
-        for i in range(v['keepCount'],0,-1):
+        for i in range(job['keepCount'],0,-1):
             if os.path.isdir(prefix+str(i-1)):
                 os.rename(prefix+str(i-1),prefix+str(i))
                 rotates.append(str(i-1)+'>>'+str(i))
         log_debug('rotating '+('  '.join(rotates)))
     else: # not complete
-        log_debug('backup of '+v['host']+'/'+v['name']+' is complete')
+        log_debug('backup of '+job['host']+'/'+job['volume']+' is complete')
         if os.path.isdir(prefix+'0'):
             log_debug('removing 0')
             shutil.rmtree(prefix+'0')
 
     if complete:
-        v['status'] = status.SUCCEEDED
+        job['status'] = status.SUCCEEDED
     else: # not complete
-        v['status'] = status.FAILED
-    v['lastBackupDurationSec'] = (endTime - startTime).seconds
+        job['status'] = status.FAILED
+    job['lastBackupDurationSec'] = (endTime - startTime).seconds
 
     log_debug('done')
 
@@ -478,26 +478,26 @@ def do_backup(v):
 def do_single_pass():
 
     write_status('thinking',0,None)
-    volumes = buildVolumeTable()
-    volumes = updateAgesAndSort(volumes)
-    tableToLogAndDisk('thinking',volumes)
+    jobs = buildJobTable()
+    jobs = updateAgesAndSort(jobs)
+    tableToLogAndDisk('thinking',jobs)
 
     # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
 
     log_info('start of single pass')
-    for volume in volumes:
-        if volume['ageSec'] < volume['cycleSec']: continue
-        if volume['disabled']: continue
-        tableToLogAndDisk("backing up '"+volume['index']+"'", volumes)
-        do_backup(volume)
+    for job in jobs:
+        if job['ageSec'] < job['cycleSec']: continue
+        if job['disabled']: continue
+        tableToLogAndDisk("backing up '"+job['index']+"'", jobs)
+        do_backup(job)
 
     log_info('end of single pass')
 
     # sleep for a little bit
     for i in range(sleepMin,0,-1):
         write_status('idle',i,None)
-        volumes = updateAgesAndSort(volumes)
-        tableToLogAndDisk('sleeping '+str(i)+' min',volumes)
+        jobs = updateAgesAndSort(jobs)
+        tableToLogAndDisk('sleeping '+str(i)+' min',jobs)
         time.sleep(60)
 
 #-----------------------------------------------------------
