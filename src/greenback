@@ -237,18 +237,60 @@ def buildJobTable():
 
     jobInfo = []
 
-    configFilename = topdir+'/config.py'
+    configFilename = '/etc/greenback.cfg'
     try:
-        config = imp.load_source('config', configFilename)
         log_debug("config file '"+configFilename+"' found")
-        jobInfo = config.jobInfo
+        configFilePtr = open( configFilename, "r" )
     except ImportError:
         log_debug("config file '"+configFilename+"' not found")
         pass
 
-    # FILL IN THE 'jobInfo' DICTIONARY
+    # MAKE BASIC ENTRIES IN THE 'jobInfo' DICTIONARY FROM /etc/greenback.cfg
+
+    for line in configFilePtr:
+        line = line.rstrip('\r\n')
+        log_debug(configFilename+": "+line)
+        pieces = line.split(' ')
+        rawconfig = {}   # raw junk read from config file
+        for piece in pieces:
+            keyValuePair = piece.split('=')
+            if len(keyValuePair) == 2:
+                key = keyValuePair[0]
+                value = keyValuePair[1]
+                rawconfig[key] = value
+                log_debug(" + "+key+":"+value)
+        log_debug('raw:'+','.join(['%s>%s' % (key, value) for (key, value) in rawconfig.items()]) )
+
+        sanitized = {}   # sanitized job description
+        # STRING OPTIONS
+        req1 = setParmString(configFilename,rawconfig,'host',sanitized,'host')
+        req2 = setParmString(configFilename,rawconfig,'volume',sanitized,'volume')
+        req3 = setParmString(configFilename,rawconfig,'src',sanitized,'src')
+        setParmString(configFilename,rawconfig,'label',sanitized,'label')
+        # NUMBER OPTIONS
+        setParmInt(configFilename,rawconfig,'cycleDay',sanitized,'cycleSec',86400)
+        setParmInt(configFilename,rawconfig,'cycleHour',sanitized,'cycleSec',3600)
+        setParmInt(configFilename,rawconfig,'cycleMin',sanitized,'cycleSec',60)
+        setParmInt(configFilename,rawconfig,'cycleSec',sanitized,'cycleSec')
+        setParmInt(configFilename,rawconfig,'keepCount',sanitized,'keepCount')
+        # BOOLEAN OPTIONS
+        setParmBool(configFilename,rawconfig,'disabled',sanitized,'disabled')
+
+        # IF THE JOB INFO IS COMPLETE, THEN SAVE IT
+        if len(sanitized) > 0 :
+            if req1 and req2 and req3:
+                log_debug('sanitized:'+','.join(['%s>%s' % (key, value) for (key, value) in sanitized.items()]) )
+                jobInfo.append(sanitized)
+            else:
+                log_info('ERROR:'+','.join(['%s>%s' % (key, value) for (key, value) in sanitized.items()]) )
+
+    log_debug('end of '+configFilename)
+
+    # FILL IN THE 'jobInfo' DICTIONARY FROM DEFAULTS AND MORE CONFIGS
 
     for job in jobInfo:
+
+        log_debug('job:'+','.join(['%s>%s' % (key, value) for (key, value) in job.items()]) )
 
         # set an index to refer to this entry by
         index = job['host']+'-'+job['volume']
@@ -265,29 +307,29 @@ def buildJobTable():
         if 'disabled' not in job: job['disabled'] = False
 
         # build a list of several optional config files to look for
-        configFiles=[]
-        configFiles.append(topdir+'/config') # /backup/config
-        configFiles.append(topdir+'/'+job['host']+'/config') # /backup/host/config
-        configFiles.append(topdir+'/'+job['host']+'/'+job['volume']+'/config') # /backup/host/volume/config
+        configFilenames=[]
+        configFilenames.append(topdir+'/config') # /backup/config
+        configFilenames.append(topdir+'/'+job['host']+'/config') # /backup/host/config
+        configFilenames.append(topdir+'/'+job['host']+'/'+job['volume']+'/config') # /backup/host/volume/config
 
-        for configFile in configFiles:
+        for configFilename in configFilenames:
             # read the config files if they exist
-            if os.path.isfile(configFile):
-                log_debug("reading config file '"+configFile+"'")
-                config = cfgfile_to_dict(configFile)
+            if os.path.isfile(configFilename):
+                log_debug("reading config file '"+configFilename+"'")
+                config = cfgfile_to_dict(configFilename)
                 # STRING OPTIONS
-                setParmString(configFile,config,'src',job,'src')
-                setParmString(configFile,config,'label',job,'label')
+                setParmString(configFilename,config,'src',job,'src')
+                setParmString(configFilename,config,'label',job,'label')
                 # NUMBER OPTIONS
-                setParmInt(configFile,config,'cycleDay',job,'cycleSec',86400)
-                setParmInt(configFile,config,'cycleHour',job,'cycleSec',3600)
-                setParmInt(configFile,config,'cycleMin',job,'cycleSec',60)
-                setParmInt(configFile,config,'cycleSec',job,'cycleSec')
-                setParmInt(configFile,config,'keepCount',job,'keepCount')
+                setParmInt(configFilename,config,'cycleDay',job,'cycleSec',86400)
+                setParmInt(configFilename,config,'cycleHour',job,'cycleSec',3600)
+                setParmInt(configFilename,config,'cycleMin',job,'cycleSec',60)
+                setParmInt(configFilename,config,'cycleSec',job,'cycleSec')
+                setParmInt(configFilename,config,'keepCount',job,'keepCount')
                 # BOOLEAN OPTIONS
-                setParmBool(configFile,config,'disabled',job,'disabled')
+                setParmBool(configFilename,config,'disabled',job,'disabled')
             else:
-                log_debug("no config file '"+configFile+"'")
+                log_debug("no config file '"+configFilename+"'")
 
     # LOOK AT RECENT BACKUPS
 
