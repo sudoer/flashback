@@ -72,10 +72,12 @@ class FakeSecHead(object):
 def cfgfile_to_dict(filename):
     file = open(filename) # , encoding="utf_8")
     config = ConfigParser.ConfigParser()
+    config.optionxform = str
     #config.read_file(add_section_header(file, 'dummy'), source=filename)
     config.readfp(FakeSecHead(open(filename)))
     aDict={}
     for aTuple in config.items('fake'):
+        log_info('cfg '+filename+':'+aTuple[0]+'>'+aTuple[1])
         aDict[aTuple[0]]=aTuple[1]
     return aDict
 
@@ -205,6 +207,7 @@ def disk_usage(path):
 #-----------------------------------------------------------
 
 def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
+    log_debug('setParmString('+cfgFile+','+cfgIdx+','+volIdx+')')
     if cfgIdx not in cfgHash: return False
     volHash[volIdx] = cfgHash[cfgIdx]
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> STRING >> '+volIdx+'='+volHash[volIdx])
@@ -213,6 +216,7 @@ def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
 #-----------------------------------------------------------
 
 def setParmInt(cfgFile,cfgHash,cfgIdx,volHash,volIdx,multiplier=1):
+    log_debug('setParmInt('+cfgFile+','+cfgIdx+','+volIdx+','+str(multiplier)+')')
     if cfgIdx not in cfgHash: return False
     volHash[volIdx] = int(cfgHash[cfgIdx]) * multiplier
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> INT >> '+volIdx+'='+str(volHash[volIdx]))
@@ -221,12 +225,11 @@ def setParmInt(cfgFile,cfgHash,cfgIdx,volHash,volIdx,multiplier=1):
 #-----------------------------------------------------------
 
 def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
+    log_debug('setParmBool('+cfgFile+','+cfgIdx+','+volIdx+')')
     if cfgIdx not in cfgHash: return False
     if cfgHash[cfgIdx].lower() in ['yes','y','true','1']:
-        log_debug('TRUE')
         volHash[volIdx] = True
     else:
-        log_debug('FALSE')
         volHash[volIdx] = False
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> BOOL >> '+volIdx+'='+( 'TRUE' if volHash[volIdx] else 'FALSE'))
     return True
@@ -316,18 +319,18 @@ def buildJobTable():
             # read the config files if they exist
             if os.path.isfile(configFilename):
                 log_debug("reading config file '"+configFilename+"'")
-                config = cfgfile_to_dict(configFilename)
+                rawconfig = cfgfile_to_dict(configFilename)
                 # STRING OPTIONS
-                setParmString(configFilename,config,'src',job,'src')
-                setParmString(configFilename,config,'label',job,'label')
+                setParmString(configFilename,rawconfig,'src',job,'src')
+                setParmString(configFilename,rawconfig,'label',job,'label')
                 # NUMBER OPTIONS
-                setParmInt(configFilename,config,'cycleDay',job,'cycleSec',86400)
-                setParmInt(configFilename,config,'cycleHour',job,'cycleSec',3600)
-                setParmInt(configFilename,config,'cycleMin',job,'cycleSec',60)
-                setParmInt(configFilename,config,'cycleSec',job,'cycleSec')
-                setParmInt(configFilename,config,'keepCount',job,'keepCount')
+                setParmInt(configFilename,rawconfig,'cycleDay',job,'cycleSec',86400)
+                setParmInt(configFilename,rawconfig,'cycleHour',job,'cycleSec',3600)
+                setParmInt(configFilename,rawconfig,'cycleMin',job,'cycleSec',60)
+                setParmInt(configFilename,rawconfig,'cycleSec',job,'cycleSec')
+                setParmInt(configFilename,rawconfig,'keepCount',job,'keepCount')
                 # BOOLEAN OPTIONS
-                setParmBool(configFilename,config,'disabled',job,'disabled')
+                setParmBool(configFilename,rawconfig,'disabled',job,'disabled')
             else:
                 log_debug("no config file '"+configFilename+"'")
 
