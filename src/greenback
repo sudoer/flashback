@@ -18,8 +18,9 @@ NOW
 [ ] bug?? : failures still update timestamp
 [ ] install monitor.sh in examples
 [ ] test start/stop/install/uninstall
-[ ] top-level config file - change from import to config format
-[ ] top-level config file - move to /etc
+[x] top-level config file - change from import to config format
+[x] top-level config file - move to /etc
+[x] config file - allow comments
 [ ] config file - user-defined "topdir"
 
 LATER
@@ -40,10 +41,9 @@ import shutil
 # from configobj import ConfigObj         # apt-get install python-configobj
 import imp
 import errno
-import ConfigParser
 
 
-#===========================================================
+#-----------------------------------------------------------
 
 class DefaultsClass:
     def __init__ (self, *argv, **argd):
@@ -57,31 +57,92 @@ def enum(*sequential, **named):
 
 #-----------------------------------------------------------
 
-class FakeSecHead(object):
-    def __init__(self, fp):
-        self.fp = fp
-        self.sechead = '[fake]\n'
-    def readline(self):
-        if self.sechead:
-            try: return self.sechead
-            finally: self.sechead = None
-        else: return self.fp.readline()
+def jobfile_to_array(filename):
+    try:
+        log_debug("config file '"+filename+"' found")
+        configFilePtr = open( filename, "r" )
+    except ImportError:
+        log_debug("config file '"+filename+"' not found")
+        pass
+
+    # MAKE BASIC ENTRIES IN THE 'jobInfo' DICTIONARY FROM /etc/greenback.jobs
+
+    sanitizedJobs = []
+    for line in configFilePtr:
+        line = line.rstrip('\r\n')
+        log_debug(filename+": "+line)
+        pieces = line.split(' ')
+        rawJob = {}   # raw junk read from config file
+        for piece in pieces:
+            keyValuePair = piece.split('=')
+            if len(keyValuePair) == 2:
+                key = keyValuePair[0]
+                value = keyValuePair[1]
+                rawJob[key] = value
+        if len(rawJob) == 0:
+            continue
+        log_debug('raw job: '+','.join(['%s>%s' % (key, value) for (key, value) in rawJob.items()]) )
+
+        sanitizedJob = {}   # sanitized job description
+        # STRING OPTIONS
+        req1 = setParmString(filename,rawJob,'host',sanitizedJob,'host')
+        req2 = setParmString(filename,rawJob,'volume',sanitizedJob,'volume')
+        req3 = setParmString(filename,rawJob,'src',sanitizedJob,'src')
+        setParmString(filename,rawJob,'label',sanitizedJob,'label')
+        # NUMBER OPTIONS
+        setParmInt(filename,rawJob,'cycleDay',sanitizedJob,'cycleSec',86400)
+        setParmInt(filename,rawJob,'cycleHour',sanitizedJob,'cycleSec',3600)
+        setParmInt(filename,rawJob,'cycleMin',sanitizedJob,'cycleSec',60)
+        setParmInt(filename,rawJob,'cycleSec',sanitizedJob,'cycleSec')
+        setParmInt(filename,rawJob,'keepCount',sanitizedJob,'keepCount')
+        # BOOLEAN OPTIONS
+        setParmBool(filename,rawJob,'disabled',sanitizedJob,'disabled')
+
+        # IF THE JOB INFO IS COMPLETE, THEN SAVE IT
+        if len(sanitizedJob) > 0 :
+            if req1 and req2 and req3:
+                log_debug('sanitizedJob:'+','.join(['%s>%s' % (key, value) for (key, value) in sanitizedJob.items()]) )
+                sanitizedJobs.append(sanitizedJob)
+            else:
+                log_error('incomplete job '+','.join(['%s>%s' % (key, value) for (key, value) in sanitizedJob.items()]) )
+
+    log_debug('end of '+filename)
+    return sanitizedJobs
 
 #-----------------------------------------------------------
 
 def cfgfile_to_dict(filename):
-    file = open(filename) # , encoding="utf_8")
-    config = ConfigParser.ConfigParser()
-    config.optionxform = str
-    #config.read_file(add_section_header(file, 'dummy'), source=filename)
-    config.readfp(FakeSecHead(open(filename)))
-    aDict={}
-    for aTuple in config.items('fake'):
-        log_info('cfg '+filename+':'+aTuple[0]+'>'+aTuple[1])
-        aDict[aTuple[0]]=aTuple[1]
-    return aDict
+    try:
+        log_debug("config file '"+filename+"' found")
+        handle = open( filename, "r" )
+    except ImportError:
+        log_debug("config file '"+filename+"' not found")
+        return dict()
 
-#===========================================================
+    # PARSE CONFIG FILE, BUILD DICTIONARY
+
+    raw = {}
+    for line in handle:
+        line = line.partition('#')[0]  # strip comments
+        line = line.rstrip('\r\n')     # strip trailing CR/LF
+        line = line.strip(' ')         # strip leading space
+        if len(line) == 0:
+            continue
+        if line.find('=') == -1:
+            log_error('unknown config file option in '+filename+' > '+line)
+            continue
+        log_debug(filename+": "+line)
+        (key,eq,value) = line.partition('=')
+        key = key.strip()
+        value = value.strip()
+        raw[key] = value
+        log_debug(filename+" "+key+":"+value)
+
+    handle.close()
+    log_debug('raw '+','.join(['%s:%s' % (key, value) for (key, value) in raw.items()]) )
+    return raw
+
+#-----------------------------------------------------------
 
 # globals
 programName = 'greenback'
@@ -126,6 +187,15 @@ def log_info(string):
     global g_logFD
     timeStamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     g_logFD.write(timeStamp+" "+string+"\n")
+    g_logFD.flush()
+    ##os.fsync(g_logFD)
+
+#-----------------------------------------------------------
+
+def log_error(string):
+    global g_logFD
+    timeStamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    g_logFD.write(timeStamp+" ERROR "+string+"\n")
     g_logFD.flush()
     ##os.fsync(g_logFD)
 
@@ -207,7 +277,6 @@ def disk_usage(path):
 #-----------------------------------------------------------
 
 def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
-    log_debug('setParmString('+cfgFile+','+cfgIdx+','+volIdx+')')
     if cfgIdx not in cfgHash: return False
     volHash[volIdx] = cfgHash[cfgIdx]
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> STRING >> '+volIdx+'='+volHash[volIdx])
@@ -216,7 +285,6 @@ def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
 #-----------------------------------------------------------
 
 def setParmInt(cfgFile,cfgHash,cfgIdx,volHash,volIdx,multiplier=1):
-    log_debug('setParmInt('+cfgFile+','+cfgIdx+','+volIdx+','+str(multiplier)+')')
     if cfgIdx not in cfgHash: return False
     volHash[volIdx] = int(cfgHash[cfgIdx]) * multiplier
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> INT >> '+volIdx+'='+str(volHash[volIdx]))
@@ -225,7 +293,6 @@ def setParmInt(cfgFile,cfgHash,cfgIdx,volHash,volIdx,multiplier=1):
 #-----------------------------------------------------------
 
 def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
-    log_debug('setParmBool('+cfgFile+','+cfgIdx+','+volIdx+')')
     if cfgIdx not in cfgHash: return False
     if cfgHash[cfgIdx].lower() in ['yes','y','true','1']:
         volHash[volIdx] = True
@@ -238,56 +305,7 @@ def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
 
 def buildJobTable():
 
-    jobInfo = []
-
-    configFilename = '/etc/greenback.cfg'
-    try:
-        log_debug("config file '"+configFilename+"' found")
-        configFilePtr = open( configFilename, "r" )
-    except ImportError:
-        log_debug("config file '"+configFilename+"' not found")
-        pass
-
-    # MAKE BASIC ENTRIES IN THE 'jobInfo' DICTIONARY FROM /etc/greenback.cfg
-
-    for line in configFilePtr:
-        line = line.rstrip('\r\n')
-        log_debug(configFilename+": "+line)
-        pieces = line.split(' ')
-        rawconfig = {}   # raw junk read from config file
-        for piece in pieces:
-            keyValuePair = piece.split('=')
-            if len(keyValuePair) == 2:
-                key = keyValuePair[0]
-                value = keyValuePair[1]
-                rawconfig[key] = value
-                log_debug(" + "+key+":"+value)
-        log_debug('raw:'+','.join(['%s>%s' % (key, value) for (key, value) in rawconfig.items()]) )
-
-        sanitized = {}   # sanitized job description
-        # STRING OPTIONS
-        req1 = setParmString(configFilename,rawconfig,'host',sanitized,'host')
-        req2 = setParmString(configFilename,rawconfig,'volume',sanitized,'volume')
-        req3 = setParmString(configFilename,rawconfig,'src',sanitized,'src')
-        setParmString(configFilename,rawconfig,'label',sanitized,'label')
-        # NUMBER OPTIONS
-        setParmInt(configFilename,rawconfig,'cycleDay',sanitized,'cycleSec',86400)
-        setParmInt(configFilename,rawconfig,'cycleHour',sanitized,'cycleSec',3600)
-        setParmInt(configFilename,rawconfig,'cycleMin',sanitized,'cycleSec',60)
-        setParmInt(configFilename,rawconfig,'cycleSec',sanitized,'cycleSec')
-        setParmInt(configFilename,rawconfig,'keepCount',sanitized,'keepCount')
-        # BOOLEAN OPTIONS
-        setParmBool(configFilename,rawconfig,'disabled',sanitized,'disabled')
-
-        # IF THE JOB INFO IS COMPLETE, THEN SAVE IT
-        if len(sanitized) > 0 :
-            if req1 and req2 and req3:
-                log_debug('sanitized:'+','.join(['%s>%s' % (key, value) for (key, value) in sanitized.items()]) )
-                jobInfo.append(sanitized)
-            else:
-                log_info('ERROR:'+','.join(['%s>%s' % (key, value) for (key, value) in sanitized.items()]) )
-
-    log_debug('end of '+configFilename)
+    jobInfo = jobfile_to_array('/etc/greenback.jobs')
 
     # FILL IN THE 'jobInfo' DICTIONARY FROM DEFAULTS AND MORE CONFIGS
 
@@ -460,6 +478,9 @@ def tableToLogAndDisk(activity,jobInfo):
 def do_backup(job):
 
     write_status('backup',0,job['index'])
+
+    # if this is our first time, create a host/volume directory
+    mkdir_p(topdir+'/'+job['host']+'/'+job['volume'])
 
     args = [
         '-al',
