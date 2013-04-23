@@ -61,7 +61,7 @@ def jobfile_to_array(filename):
     try:
         log_debug("config file '"+filename+"' found")
         configFilePtr = open( filename, "r" )
-    except ImportError:
+    except OSError:
         log_debug("config file '"+filename+"' not found")
         pass
 
@@ -115,7 +115,7 @@ def cfgfile_to_dict(filename):
     try:
         log_debug("config file '"+filename+"' found")
         handle = open( filename, "r" )
-    except ImportError:
+    except OSError:
         log_debug("config file '"+filename+"' not found")
         return dict()
 
@@ -319,7 +319,6 @@ def buildJobTable():
 
         # set some defaults - always
         job['status'] = status.UNKNOWN
-        job['lastBackupTimestamp'] = defaults.lastBackupTimestamp
         job['lastBackupDurationSec'] = 0
         # set some defaults - only if not set in config.py (TODO: change this)
         if 'label' not in job: job['label'] = defaults.label
@@ -352,28 +351,15 @@ def buildJobTable():
             else:
                 log_debug("no config file '"+configFilename+"'")
 
-    # LOOK AT RECENT BACKUPS
-
-    # TODO - don't just read all files, start from config instead
-    recentBackups = glob.glob(topdir+'/*/*/*.1')
-    for recentBackup in recentBackups:
-        # break the wildcard (glob) into parts
-        junk1, junk2, right = recentBackup.partition(topdir)
-        pathpieces = right.split('/')
-        host = pathpieces[1]
-        volume = pathpieces[2]
-        # Get the creation time of the daily.1 directory.
+        # Get the creation time of the daily.1 directory, if it exists.
+        recentBackup = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1'
         # Note: ctime() does not refer to creation time on *nix systems,
         # but rather the last time the inode data changed.
-        lastBackupTimestamp = datetime.datetime.fromtimestamp(os.path.getmtime(recentBackup))
-        # find the jobInfo line that contains key='host-volume'
-        try:
-            idx = map(operator.itemgetter('index'), jobInfo).index(host+'-'+volume)
-            log_debug('host='+host+', volume='+volume+', '+host+'-'+volume+' is in slot %d'%idx)
-            jobInfo[idx]['lastBackupTimestamp'] = lastBackupTimestamp
-        except ValueError:
-            log_debug('host='+host+', volume='+volume+', '+host+'-'+volume+' is not in the list of jobs')
-            pass
+        if os.path.exists(recentBackup):
+            mtime = os.path.getmtime(recentBackup)
+            job['lastBackupTimestamp'] = datetime.datetime.fromtimestamp(mtime)
+        else:
+            job['lastBackupTimestamp'] = defaults.lastBackupTimestamp
 
     return jobInfo
 
