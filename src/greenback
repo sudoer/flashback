@@ -14,7 +14,7 @@ NOW
 [x] debian package
 [ ] push to github
 [ ] write summary info to a per-backup status/history file (sqlite?)
-[ ] second-level backups
+[x] second-level backups
 [ ] bug?? : failures (half-copies) still update daily.1 timestamp
 [ ] install monitor.sh in examples
 [ ] test start/stop/install/uninstall
@@ -22,6 +22,8 @@ NOW
 [x] top-level config file - move to /etc
 [x] config file - allow comments
 [ ] config file - user-defined "topdir"
+[ ] config file - default cycle times, labels
+[ ] rsyncOpts does not work
 
 LATER
 ~~~~~
