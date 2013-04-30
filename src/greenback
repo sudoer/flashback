@@ -15,7 +15,7 @@ NOW
 [ ] push to github
 [ ] write summary info to a per-backup status/history file (sqlite?)
 [ ] second-level backups
-[ ] bug?? : failures still update timestamp
+[ ] bug?? : failures (half-copies) still update daily.1 timestamp
 [ ] install monitor.sh in examples
 [ ] test start/stop/install/uninstall
 [x] top-level config file - change from import to config format
@@ -44,6 +44,8 @@ import errno
 
 
 #-----------------------------------------------------------
+#  C L A S S E S
+#-----------------------------------------------------------
 
 class DefaultsClass:
     def __init__ (self, *argv, **argd):
@@ -54,6 +56,27 @@ class DefaultsClass:
 def enum(*sequential, **named):
     enums = dict(zip(sequential, range(len(sequential))), **named)
     return type('Enum', (), enums)
+
+#-----------------------------------------------------------
+#  S T A R T
+#-----------------------------------------------------------
+
+# globals
+programName = 'greenback'
+topdir = '/backup'
+libdir = '/var/lib/'+programName
+maxAge = 10000000
+sleepMin = 10
+# defaults (globals)
+class defaults (DefaultsClass):
+    lastBackupTimestamp = datetime.datetime(1970,1,1)
+    cycleSec = 24*60*60
+    keepCount = 9
+    label = 'daily'
+# plumbing (globals)
+options = ()
+g_logFD = None
+status = enum('UNKNOWN', 'NOT_READY', 'READY', 'SUCCEEDED', 'FAILED', 'DISABLED')
 
 #-----------------------------------------------------------
 
@@ -141,25 +164,6 @@ def cfgfile_to_dict(filename):
     handle.close()
     log_debug('raw '+','.join(['%s:%s' % (key, value) for (key, value) in raw.items()]) )
     return raw
-
-#-----------------------------------------------------------
-
-# globals
-programName = 'greenback'
-topdir = '/backup'
-libdir = '/var/lib/'+programName
-maxAge = 10000000
-sleepMin = 10
-# defaults (globals)
-class defaults (DefaultsClass):
-    lastBackupTimestamp = datetime.datetime(1970,1,1)
-    cycleSec = 24*60*60
-    keepCount = 9
-    label = 'daily'
-# plumbing (globals)
-options = ()
-g_logFD = None
-status = enum('UNKNOWN', 'NOT_READY', 'READY', 'SUCCEEDED', 'FAILED', 'DISABLED')
 
 #-----------------------------------------------------------
 
