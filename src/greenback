@@ -112,6 +112,8 @@ def jobfile_to_array(filename):
         req2 = setParmString(filename,rawJob,'volume',sanitizedJob,'volume')
         req3 = setParmString(filename,rawJob,'src',sanitizedJob,'src')
         setParmString(filename,rawJob,'label',sanitizedJob,'label')
+        setParmString(filename,rawJob,'rsyncOpts',sanitizedJob,'rsyncOpts')
+        setParmString(filename,rawJob,'tool',sanitizedJob,'tool')
         # NUMBER OPTIONS
         setParmInt(filename,rawJob,'cycleDay',sanitizedJob,'cycleSec',86400)
         setParmInt(filename,rawJob,'cycleHour',sanitizedJob,'cycleSec',3600)
@@ -317,18 +319,20 @@ def buildJobTable():
 
         log_debug('job:'+','.join(['%s>%s' % (key, value) for (key, value) in job.items()]) )
 
-        # set an index to refer to this entry by
-        index = job['host']+'-'+job['volume']
-        job['index'] = index
-
         # set some defaults - always
         job['status'] = status.UNKNOWN
         job['lastBackupDurationSec'] = 0
-        # set some defaults - only if not set in config.py (TODO: change this)
+        # set some defaults - only if not set in main jobs config file (TODO: change this ???)
         if 'label' not in job: job['label'] = defaults.label
         if 'cycleSec' not in job: job['cycleSec'] = defaults.cycleSec
         if 'keepCount' not in job: job['keepCount'] = defaults.keepCount
         if 'disabled' not in job: job['disabled'] = False
+        if 'tool' not in job: job['tool'] = 'rsync'
+        if 'rsyncOpts' not in job: job['rsyncOpts'] = ''
+
+        # set an index to refer to this entry by
+        index = job['host']+'-'+job['volume']+'-'+job['label']
+        job['index'] = index
 
         # build a list of several optional config files to look for
         configFilenames=[]
@@ -344,6 +348,8 @@ def buildJobTable():
                 # STRING OPTIONS
                 setParmString(configFilename,rawconfig,'src',job,'src')
                 setParmString(configFilename,rawconfig,'label',job,'label')
+                setParmString(configFilename,rawconfig,'rsyncOpts',job,'rsyncOpts')
+                setParmString(configFilename,rawconfig,'tool',job,'tool')
                 # NUMBER OPTIONS
                 setParmInt(configFilename,rawconfig,'cycleDay',job,'cycleSec',86400)
                 setParmInt(configFilename,rawconfig,'cycleHour',job,'cycleSec',3600)
@@ -465,7 +471,7 @@ def tableToLogAndDisk(activity,jobInfo):
 
 #-----------------------------------------------------------
 
-def do_backup(job):
+def do_rsync_backup(job):
 
     write_status('backup',0,job['index'])
 
@@ -483,7 +489,7 @@ def do_backup(job):
 #       '--stats',
         '--link-dest='+topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1',
     ]
-
+    userArgs = job['rsyncOpts'].split(' ')
     src = job['src']
     dest = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
 
@@ -494,11 +500,9 @@ def do_backup(job):
         log_debug('"excludes" file found, adding argument')
         args.append('--exclude-from='+excludes)
 
-    cmd = ['/usr/bin/rsync'] + args + [src, dest]
+    cmd = ['/usr/bin/rsync'] + args + [src, dest] # + userArgs
     log_info('running >> '+(','.join(cmd)))
-    startTime = datetime.datetime.now()
     (rc,stdout,stderr) = shell_capture(cmd)
-    endTime = datetime.datetime.now()
 
     #   0      Success
     #   1      Syntax or usage error
@@ -521,43 +525,84 @@ def do_backup(job):
     #   30     Timeout in data send/receive
     #   35     Timeout waiting for daemon connection
     complete = True if rc in (0, 24) else False
-    log_debug('rc = %d, '%rc)
+    log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
+
+    if complete:
+        prefix = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+        if os.path.isdir(prefix+'0'):
+            # "touch" the timestamp
+            os.utime(prefix+'0',None)
+        else:
+            log_debug(prefix+'0 directory was not found, marking incomplete')
+            complete = False
+
+    log_debug('backup of '+job['host']+'/'+job['volume']+' is %s' %
+        ('complete' if complete else 'incomplete') )
+
+    return complete
+
+#-----------------------------------------------------------
+
+def do_cp_backup(job):
+
+    write_status('backup',0,job['index'])
+
+    # if this is our first time, create a host/volume directory
+    mkdir_p(topdir+'/'+job['host']+'/'+job['volume'])
+
+    args = ['-alf']
+    src = job['src']
+    dest = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
+
+    cmd = ['/bin/cp'] + args + [src, dest]
+    log_info('running >> '+(','.join(cmd)))
+    (rc,stdout,stderr) = shell_capture(cmd)
+    #   0      Success
+    #   1      Failure
+    complete = True if rc ==0 else False
+    log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
+
+    if complete:
+        prefix = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+        if os.path.isdir(prefix+'0'):
+            # "touch" the timestamp
+            os.utime(prefix+'0',None)
+        else:
+            log_debug(prefix+'0 directory was not found, marking incomplete')
+            complete = False
+
+    log_debug('backup of '+job['host']+'/'+job['volume']+' is %s' %
+        ('complete' if complete else 'incomplete') )
+
+    return complete
+
+#-----------------------------------------------------------
+
+def rotate(job):
+
+    write_status('rotate',0,job['index'])
+    prefix = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+
+    # rotate the numbered backups
+    if os.path.isdir(prefix+str(job['keepCount'])):
+        log_debug('removing '+str(job['keepCount']))
+        shutil.rmtree(prefix+str(job['keepCount']))
+    rotates=[]
+    for i in range(job['keepCount'],0,-1):
+        if os.path.isdir(prefix+str(i-1)):
+            os.rename(prefix+str(i-1),prefix+str(i))
+            rotates.append(str(i-1)+'>>'+str(i))
+    log_debug('rotating '+('  '.join(rotates)))
+
+#-----------------------------------------------------------
+
+def discard(job):
 
     prefix = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
-    if os.path.isdir(prefix+'0') == False:
-        log_debug(prefix+'0 directory was not found, marking incomplete')
-        complete = False
-
-    if complete:
-        log_debug('backup of '+job['host']+'/'+job['volume']+' is complete')
-        # "touch" the timestamp
-        os.utime(prefix+'0',None)
-        # rotate the numbered backups
-        write_status('rotate',0,job['index'])
-        if os.path.isdir(prefix+str(job['keepCount'])):
-            log_debug('removing '+str(job['keepCount']))
-            shutil.rmtree(prefix+str(job['keepCount']))
-        rotates=[]
-        for i in range(job['keepCount'],0,-1):
-            if os.path.isdir(prefix+str(i-1)):
-                os.rename(prefix+str(i-1),prefix+str(i))
-                rotates.append(str(i-1)+'>>'+str(i))
-        log_debug('rotating '+('  '.join(rotates)))
-    else: # not complete
-        log_debug('backup of '+job['host']+'/'+job['volume']+' is complete')
-        if os.path.isdir(prefix+'0'):
-            log_debug('removing 0')
-            shutil.rmtree(prefix+'0')
-
-    if complete:
-        job['status'] = status.SUCCEEDED
-    else: # not complete
-        job['status'] = status.FAILED
-    job['lastBackupDurationSec'] = (endTime - startTime).seconds
-
-    log_debug('done')
-
-    return 1 if complete else 0
+    if os.path.isdir(prefix+'0'):
+        write_status('discard',0,job['index'])
+        log_debug('removing 0')
+        shutil.rmtree(prefix+'0')
 
 #-----------------------------------------------------------
 
@@ -575,7 +620,24 @@ def do_single_pass():
         if job['ageSec'] < job['cycleSec']: continue
         if job['disabled']: continue
         tableToLogAndDisk("backing up '"+job['index']+"'", jobs)
-        do_backup(job)
+        startTime = datetime.datetime.now()
+        if job['tool'] == 'rsync':
+            if do_rsync_backup(job):
+                job['status'] = status.SUCCEEDED
+                rotate(job)
+            else: # not complete
+                job['status'] = status.FAILED
+                discard(job)
+        elif job['tool'] == 'cp':
+            if do_cp_backup(job):
+                job['status'] = status.SUCCEEDED
+                rotate(job)
+            else: # not complete
+                job['status'] = status.FAILED
+                discard(job)
+        endTime = datetime.datetime.now()
+        job['lastBackupDurationSec'] = (endTime - startTime).seconds
+        log_debug('done')
 
     log_info('end of single pass')
 
