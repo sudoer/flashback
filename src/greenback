@@ -94,7 +94,9 @@ def jobfile_to_array(filename):
 
     sanitizedJobs = []
     for line in configFilePtr:
-        line = line.rstrip('\r\n')
+        line = line.partition('#')[0]  # strip comments
+        line = line.rstrip('\r\n')     # strip trailing CR/LF
+        line = line.strip(' ')         # strip leading space
         log_debug(filename+": "+line)
         pieces = line.split(' ')
         rawJob = {}   # raw junk read from config file
