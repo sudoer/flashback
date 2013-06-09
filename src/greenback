@@ -48,7 +48,7 @@ import errno
 #  H E L P E R   C L A S S E S
 #-----------------------------------------------------------
 
-def enum(*sequential, **named):
+def enum(*sequential, **named) :
     enums = dict(zip(sequential, range(len(sequential))), **named)
     return type('Enum', (), enums)
 
@@ -77,31 +77,31 @@ status = enum('UNKNOWN', 'NOT_READY', 'READY', 'SUCCEEDED', 'FAILED', 'DISABLED'
 
 #-----------------------------------------------------------
 
-def jobfile_to_array(filename):
-    try:
+def jobfile_to_array(filename) :
+    try :
         log_debug("job file '"+filename+"' found")
         configFilePtr = open( filename, "r" )
-    except OSError:
+    except OSError :
         log_debug("job file '"+filename+"' not found")
         sys.exit(1)
 
     # MAKE BASIC ENTRIES IN THE 'jobInfo' DICTIONARY FROM /etc/greenback.jobs
 
     sanitizedJobs = []
-    for line in configFilePtr:
+    for line in configFilePtr :
         line = line.partition('#')[0]  # strip comments
         line = line.rstrip('\r\n')     # strip trailing CR/LF
         line = line.strip(' ')         # strip leading space
         log_debug(filename+": "+line)
         pieces = line.split(' ')
         rawJob = {}   # raw junk read from config file
-        for piece in pieces:
+        for piece in pieces :
             keyValuePair = piece.split('=')
-            if len(keyValuePair) == 2:
+            if len(keyValuePair) == 2 :
                 key = keyValuePair[0]
                 value = keyValuePair[1]
                 rawJob[key] = value
-        if len(rawJob) == 0:
+        if len(rawJob) == 0 :
             continue
         log_debug('raw job: '+','.join(['%s>%s' % (key, value) for (key, value) in rawJob.items()]) )
 
@@ -123,16 +123,16 @@ def jobfile_to_array(filename):
         setParmBool(filename,rawJob,'disabled',sanitizedJob,'disabled')
 
         # IF THE JOB INFO IS COMPLETE, THEN SAVE IT
-        if len(sanitizedJob) > 0:
-            if req1 and req2 and req3:
+        if len(sanitizedJob) > 0 :
+            if req1 and req2 and req3 :
                 log_debug('sanitizedJob:'+','.join(['%s>%s' % (key, value) for (key, value) in sanitizedJob.items()]) )
                 sanitizedJobs.append(sanitizedJob)
-            else:
+            else :
                 log_error('incomplete job '+','.join(['%s>%s' % (key, value) for (key, value) in sanitizedJob.items()]) )
 
         # IF THE JOB CONTAINS ERRORS, THEN STOP
-        if len(rawJob) > 0:
-            for key in rawJob.keys():
+        if len(rawJob) > 0 :
+            for key in rawJob.keys() :
                 log_error("unknown job parameter '"+key+"' in '"+filename+"'")
             sys.exit(1)
 
@@ -141,24 +141,24 @@ def jobfile_to_array(filename):
 
 #-----------------------------------------------------------
 
-def cfgfile_to_dict(filename):
-    try:
+def cfgfile_to_dict(filename) :
+    try :
         log_debug("config file '"+filename+"' found")
         handle = open( filename, "r" )
-    except OSError:
+    except OSError :
         log_debug("config file '"+filename+"' not found")
         return dict()
 
     # PARSE CONFIG FILE, BUILD DICTIONARY
 
     raw = {}
-    for line in handle:
+    for line in handle :
         line = line.partition('#')[0]  # strip comments
         line = line.rstrip('\r\n')     # strip trailing CR/LF
         line = line.strip(' ')         # strip leading space
-        if len(line) == 0:
+        if len(line) == 0 :
             continue
-        if line.find('=') == -1:
+        if line.find('=') == -1 :
             log_error('syntax error in config file '+filename+' > '+line)
             sys.exit(1)
         log_debug(filename+": "+line)
@@ -174,12 +174,12 @@ def cfgfile_to_dict(filename):
 
 #-----------------------------------------------------------
 
-def log_init():
+def log_init() :
     # we're writing these globals
     global g_logFD
     # log file
     #  logdir = os.environ['HOME']+"/var/log"
-    #  if not os.path.exists(logdir):
+    #  if not os.path.exists(logdir) :
     #     os.makedirs(logdir)
     #  logfile = logdir+"/garage.log"
     #  logfile = programName+'.log'
@@ -188,13 +188,13 @@ def log_init():
 
 #-----------------------------------------------------------
 
-def log_debug(string):
-    if options.debug: log_info(string)
+def log_debug(string) :
+    if options.debug : log_info(string)
 
 #-----------------------------------------------------------
 
-def log_info(string):
-    if options.quiet: return
+def log_info(string) :
+    if options.quiet : return
     global g_logFD
     timeStamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     g_logFD.write(timeStamp+" "+string+"\n")
@@ -203,7 +203,7 @@ def log_info(string):
 
 #-----------------------------------------------------------
 
-def log_error(string):
+def log_error(string) :
     global g_logFD
     timeStamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     g_logFD.write(timeStamp+" ERROR "+string+"\n")
@@ -212,7 +212,7 @@ def log_error(string):
 
 #-----------------------------------------------------------
 
-def shell_capture(cmdargs):
+def shell_capture(cmdargs) :
     global g_logFD
     log_debug('shell_capture command >> '+(' '.join(cmdargs)))
     p = subprocess.Popen(cmdargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -223,7 +223,7 @@ def shell_capture(cmdargs):
 
 #-----------------------------------------------------------
 
-def shell_do(cmdargs):
+def shell_do(cmdargs) :
     global g_logFD
     log_debug('shell_do command >> '+(' '.join(cmdargs)))
     rc = subprocess.call(cmdargs)
@@ -233,7 +233,7 @@ def shell_do(cmdargs):
 
 #-----------------------------------------------------------
 
-def sec2dhms(s):
+def sec2dhms(s) :
     days = s // 86400  ; s = s - (days * 86400)
     hours = s // 3600  ; s = s - (hours * 3600)
     mins = s // 60     ; s = s - (mins * 60)
@@ -242,17 +242,18 @@ def sec2dhms(s):
 
 #-----------------------------------------------------------
 
-def mkdir_p(path):
-    try:
+def mkdir_p(path) :
+    try :
         os.makedirs(path)
-    except OSError as exc: # Python >2.5
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
+    except OSError as exc : # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path) :
             pass
-        else: raise
+        else :
+            raise
 
 #-----------------------------------------------------------
 
-def write_status(doing,waitTime,target):
+def write_status(doing,waitTime,target) :
     log_debug('writing status file')
     statusFileName = libdir+'/status'
     statusFile = file(statusFileName,'w')
@@ -262,7 +263,7 @@ def write_status(doing,waitTime,target):
     statusFile.write('pid='+str(os.getpid())+'\n')
     statusFile.write('wait='+str(waitTime)+'\n')
     statusFile.write('status='+doing+'\n')
-    if target is None: target=''
+    if target is None : target=''
     statusFile.write('target='+target+'\n')
     (total, used, free) = disk_usage(defaults['topDir'])
     statusFile.write('disk.mntpt='+defaults['topDir']+'\n')
@@ -273,10 +274,10 @@ def write_status(doing,waitTime,target):
 
 #-----------------------------------------------------------
 
-def disk_usage(path):
+def disk_usage(path) :
     """Return disk usage statistics about the given path.
 
-    Returned value is a tuple with three attributes:
+    Returned value is a tuple with three attributes :
     'total', 'used' and 'free' (in bytes).
     """
     st = os.statvfs(path)
@@ -287,8 +288,8 @@ def disk_usage(path):
 
 #-----------------------------------------------------------
 
-def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
-    if cfgIdx not in cfgHash: return False
+def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx) :
+    if cfgIdx not in cfgHash : return False
     volHash[volIdx] = cfgHash[cfgIdx]
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> STRING >> '+volIdx+'='+volHash[volIdx])
     del cfgHash[cfgIdx]
@@ -296,8 +297,8 @@ def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
 
 #-----------------------------------------------------------
 
-def setParmInt(cfgFile,cfgHash,cfgIdx,volHash,volIdx,multiplier=1):
-    if cfgIdx not in cfgHash: return False
+def setParmInt(cfgFile,cfgHash,cfgIdx,volHash,volIdx,multiplier=1) :
+    if cfgIdx not in cfgHash : return False
     volHash[volIdx] = int(cfgHash[cfgIdx]) * multiplier
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> INT >> '+volIdx+'='+str(volHash[volIdx]))
     del cfgHash[cfgIdx]
@@ -305,11 +306,11 @@ def setParmInt(cfgFile,cfgHash,cfgIdx,volHash,volIdx,multiplier=1):
 
 #-----------------------------------------------------------
 
-def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
-    if cfgIdx not in cfgHash: return False
-    if cfgHash[cfgIdx].lower() in ['yes','y','true','1']:
+def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx) :
+    if cfgIdx not in cfgHash : return False
+    if cfgHash[cfgIdx].lower() in ['yes','y','true','1'] :
         volHash[volIdx] = True
-    else:
+    else :
         volHash[volIdx] = False
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> BOOL >> '+volIdx+'='+( 'TRUE' if volHash[volIdx] else 'FALSE'))
     del cfgHash[cfgIdx]
@@ -317,13 +318,13 @@ def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
 
 #-----------------------------------------------------------
 
-def buildJobTable():
+def buildJobTable() :
 
     jobInfo = jobfile_to_array('/etc/greenback.jobs')
 
     # FILL IN THE 'jobInfo' DICTIONARY FROM DEFAULTS AND MORE CONFIGS
 
-    for job in jobInfo:
+    for job in jobInfo :
 
         log_debug('job:'+','.join(['%s>%s' % (key, value) for (key, value) in job.items()]) )
 
@@ -331,9 +332,9 @@ def buildJobTable():
         job['status'] = status.UNKNOWN
         job['lastBackupDurationSec'] = 0
         # set some defaults - only if not set in main jobs config file (TODO: change this ???)
-        for i in ['label','cycleSec','keepCount','tool','rsyncOpts']:
-            if i not in job: job[i] = defaults[i]
-        if 'disabled' not in job: job['disabled'] = False
+        for i in ['label','cycleSec','keepCount','tool','rsyncOpts'] :
+            if i not in job : job[i] = defaults[i]
+        if 'disabled' not in job : job['disabled'] = False
 
         # set an index to refer to this entry by
         index = job['host']+'-'+job['volume']+'-'+job['label']
@@ -345,9 +346,9 @@ def buildJobTable():
         configFilenames.append(defaults['topDir']+'/'+job['host']+'/config') # /backup/host/config
         configFilenames.append(defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/config') # /backup/host/volume/config
 
-        for configFilename in configFilenames:
+        for configFilename in configFilenames :
             # read the config files if they exist
-            if os.path.isfile(configFilename):
+            if os.path.isfile(configFilename) :
                 log_debug("reading config file '"+configFilename+"'")
                 rawConfig = cfgfile_to_dict(configFilename)
                 # STRING OPTIONS
@@ -364,46 +365,46 @@ def buildJobTable():
                 # BOOLEAN OPTIONS
                 setParmBool(configFilename,rawConfig,'disabled',job,'disabled')
 
-                if len(rawConfig) > 0:
-                    for key in rawConfig.keys():
+                if len(rawConfig) > 0 :
+                    for key in rawConfig.keys() :
                         log_error("unknown parameter '"+key+"' in '"+configFilename+"'")
                     sys.exit(1)
 
-            else:
+            else :
                 log_debug("no config file '"+configFilename+"'")
 
         # Get the creation time of the daily.1 directory, if it exists.
         recentBackup = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1'
         # Note: ctime() does not refer to creation time on *nix systems,
         # but rather the last time the inode data changed.
-        if os.path.exists(recentBackup):
+        if os.path.exists(recentBackup) :
             mtime = os.path.getmtime(recentBackup)
             job['lastBackupTimestamp'] = datetime.datetime.fromtimestamp(mtime)
-        else:
+        else :
             job['lastBackupTimestamp'] = defaults['lastBackupTimestamp']
 
     return jobInfo
 
 #-----------------------------------------------------------
 
-def updateAgesAndSort(jobInfo):
+def updateAgesAndSort(jobInfo) :
 
     # GO THROUGH THE LIST IN ORDER, DETERMINE THEIR AGES AND NEXT BACKUP TIME
 
     now = datetime.datetime.now()
-    for job in jobInfo:
+    for job in jobInfo :
         ageDelta = now - job['lastBackupTimestamp']
         job['ageSec'] = ageDelta.seconds + (ageDelta.days * 86400)
         job['nextBackupSec'] = job['cycleSec'] - job['ageSec']
         log_debug('index='+job['index']+', nextBackupSec='+str(job['nextBackupSec'])+'sec')
         # force disabled backups to the bottom of the list
-        if job['disabled']: job['nextBackupSec'] = maxAge
+        if job['disabled'] : job['nextBackupSec'] = maxAge
 
-    for job in jobInfo:
-        if job['status'] in (status.NOT_READY, status.UNKNOWN):
+    for job in jobInfo :
+        if job['status'] in (status.NOT_READY, status.UNKNOWN) :
             # If "cycleSec" has transpired since our last backup, we're "ready".
-            if job['ageSec'] > job['cycleSec']: job['status'] = status.READY
-            else: job['status'] = status.NOT_READY
+            if job['ageSec'] > job['cycleSec'] : job['status'] = status.READY
+            else : job['status'] = status.NOT_READY
         # No matter if "ready" or not, if disabled, don't back up.
         if job['disabled']: job['status'] = status.DISABLED
 
@@ -413,10 +414,10 @@ def updateAgesAndSort(jobInfo):
 
 #-----------------------------------------------------------
 
-def formattedTable(jobs):
+def formattedTable(jobs) :
     widths = { 'index':0, 'lastBackupTimestamp':0, 'ageSec':0, 'cycleSec':0 }
-    for job in jobs:
-        for fld in ('index','ageSec','cycleSec'):
+    for job in jobs :
+        for fld in ('index','ageSec','cycleSec') :
             widths[fld] = max(widths[fld], len(str(job[fld])))
     #widths['lastBackupTimestamp'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
     widths['lastBackupTimestamp'] = len('2013-03-20 21:05:18')
@@ -430,23 +431,23 @@ def formattedTable(jobs):
         + 'STATUS')
 
     now = datetime.datetime.now()
-    for job in jobs:
+    for job in jobs :
         (d,h,m,s) = sec2dhms( job['nextBackupSec'] )
         nextBackupInterval = '%dd+%d:%02d:%02d' % (d,h,m,s)
         (d,h,m,s) = sec2dhms( job['lastBackupDurationSec'] )  # assume 0 days
         lastBackupDurationSec = '%d:%02d:%02d' % (h,m,s)
         switch = {
-            status.UNKNOWN:   '???',
-            status.DISABLED:  'DISABLED',
-            status.NOT_READY: 'NEXT RUN IN '+nextBackupInterval,
-            status.READY:     'READY',
-            status.SUCCEEDED: 'SUCCEEDED ('+lastBackupDurationSec+')',
-            status.FAILED:    'FAILED ('+lastBackupDurationSec+')',
+            status.UNKNOWN :   '???',
+            status.DISABLED :  'DISABLED',
+            status.NOT_READY : 'NEXT RUN IN '+nextBackupInterval,
+            status.READY :     'READY',
+            status.SUCCEEDED : 'SUCCEEDED ('+lastBackupDurationSec+')',
+            status.FAILED :    'FAILED ('+lastBackupDurationSec+')',
         }
         lastBackupTimestampString = job['lastBackupTimestamp'].strftime('%Y-%m-%d %H:%M:%S')
         table.append(''
             + job['index'].ljust(widths['index'])            + '   '
-            + lastBackupTimestampString                         + '   '
+            + lastBackupTimestampString                      + '   '
             + str(job['ageSec']).rjust(widths['ageSec'])     + '/'
             + str(job['cycleSec']).ljust(widths['cycleSec']) + '   '
             + switch[job['status']]
@@ -456,7 +457,7 @@ def formattedTable(jobs):
 
 #-----------------------------------------------------------
 
-def tableToLogAndDisk(activity,jobInfo):
+def tableToLogAndDisk(activity,jobInfo) :
 
     # CREATE A FORMATTED TABLE
 
@@ -469,20 +470,20 @@ def tableToLogAndDisk(activity,jobInfo):
     tableFile = file(tableFileName,'w')
     tableFile.write(date+' : '+activity+'\n')
     tableFile.write('\n')
-    for line in table:
+    for line in table :
         tableFile.write(line+'\n')
     tableFile.close()
 
     # SHOW THE SORTED LIST IN THE LOG
 
     log_info(date+' : '+activity)
-    for line in table:
+    for line in table :
         log_info(line)
     log_info('')
 
 #-----------------------------------------------------------
 
-def do_rsync_backup(job):
+def do_rsync_backup(job) :
 
     write_status('backup',0,job['index'])
 
@@ -507,7 +508,7 @@ def do_rsync_backup(job):
     # optional - "excludes" file
     excludes = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/excludes'
     log_debug('testing for ['+excludes+']')
-    if os.path.isfile(excludes):
+    if os.path.isfile(excludes) :
         log_debug('"excludes" file found, adding argument')
         args.append('--exclude-from='+excludes)
 
@@ -538,12 +539,12 @@ def do_rsync_backup(job):
     complete = True if rc in (0, 24) else False
     log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
 
-    if complete:
+    if complete :
         prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
-        if os.path.isdir(prefix+'0'):
+        if os.path.isdir(prefix+'0') :
             # "touch" the timestamp
             os.utime(prefix+'0',None)
-        else:
+        else :
             log_debug(prefix+'0 directory was not found, marking incomplete')
             complete = False
 
@@ -554,7 +555,7 @@ def do_rsync_backup(job):
 
 #-----------------------------------------------------------
 
-def do_cp_backup(job):
+def do_cp_backup(job) :
 
     write_status('backup',0,job['index'])
 
@@ -573,12 +574,12 @@ def do_cp_backup(job):
     complete = True if rc ==0 else False
     log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
 
-    if complete:
+    if complete :
         prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
-        if os.path.isdir(prefix+'0'):
+        if os.path.isdir(prefix+'0') :
             # "touch" the timestamp
             os.utime(prefix+'0',None)
-        else:
+        else :
             log_debug(prefix+'0 directory was not found, marking incomplete')
             complete = False
 
@@ -589,35 +590,35 @@ def do_cp_backup(job):
 
 #-----------------------------------------------------------
 
-def rotate(job):
+def rotate(job) :
 
     write_status('rotate',0,job['index'])
     prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
 
     # rotate the numbered backups
-    if os.path.isdir(prefix+str(job['keepCount'])):
+    if os.path.isdir(prefix+str(job['keepCount'])) :
         log_debug('removing '+str(job['keepCount']))
         shutil.rmtree(prefix+str(job['keepCount']))
     rotates=[]
-    for i in range(job['keepCount'],0,-1):
-        if os.path.isdir(prefix+str(i-1)):
+    for i in range(job['keepCount'],0,-1) :
+        if os.path.isdir(prefix+str(i-1)) :
             os.rename(prefix+str(i-1),prefix+str(i))
             rotates.append(str(i-1)+'>>'+str(i))
     log_debug('rotating '+('  '.join(rotates)))
 
 #-----------------------------------------------------------
 
-def discard(job):
+def discard(job) :
 
     prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
-    if os.path.isdir(prefix+'0'):
+    if os.path.isdir(prefix+'0') :
         write_status('discard',0,job['index'])
         log_debug('removing 0')
         shutil.rmtree(prefix+'0')
 
 #-----------------------------------------------------------
 
-def do_single_pass():
+def do_single_pass() :
 
     write_status('thinking',0,None)
     jobs = buildJobTable()
@@ -627,23 +628,23 @@ def do_single_pass():
     # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
 
     log_info('start of single pass')
-    for job in jobs:
-        if job['ageSec'] < job['cycleSec']: continue
-        if job['disabled']: continue
+    for job in jobs :
+        if job['ageSec'] < job['cycleSec'] : continue
+        if job['disabled'] : continue
         tableToLogAndDisk("backing up '"+job['index']+"'", jobs)
         startTime = datetime.datetime.now()
-        if job['tool'] == 'rsync':
-            if do_rsync_backup(job):
+        if job['tool'] == 'rsync' :
+            if do_rsync_backup(job) :
                 job['status'] = status.SUCCEEDED
                 rotate(job)
-            else: # not complete
+            else : # not complete
                 job['status'] = status.FAILED
                 discard(job)
-        elif job['tool'] == 'cp':
-            if do_cp_backup(job):
+        elif job['tool'] == 'cp' :
+            if do_cp_backup(job) :
                 job['status'] = status.SUCCEEDED
                 rotate(job)
-            else: # not complete
+            else : # not complete
                 job['status'] = status.FAILED
                 discard(job)
         endTime = datetime.datetime.now()
@@ -653,7 +654,7 @@ def do_single_pass():
     log_info('end of single pass')
 
     # sleep for a little bit
-    for i in range(sleepMin,0,-1):
+    for i in range(sleepMin,0,-1) :
         write_status('idle',i,None)
         jobs = updateAgesAndSort(jobs)
         tableToLogAndDisk('sleeping '+str(i)+' min',jobs)
@@ -662,7 +663,7 @@ def do_single_pass():
 #-----------------------------------------------------------
 
 # START
-def main():
+def main() :
 
     # FIRST -- PARSE COMMAND LINE
     usage = "usage: %prog [options]"
@@ -671,7 +672,7 @@ def main():
     parser.add_option("-q", "--quiet", action="store_true", dest="quiet")
     global options
     (options, args) = parser.parse_args()
-    if len(args) != 0:
+    if len(args) != 0 :
         parser.error("incorrect number of arguments")
 
     # SET UP SERVICES
@@ -681,26 +682,26 @@ def main():
     # LOOK FOR PID FILE, EXIT IF FOUND
 
     pidfile='/var/run/'+programName+'.pid'
-    try:
-        with open(pidfile) as f:
+    try :
+        with open(pidfile) as f :
             log_info("pidfile '%s' found... better look for a running process" % pidfile)
             pid = int(f.readline())
             # Check For the existence of a unix pid, send signal 0 to it.
-            try:
+            try :
                 os.kill(pid, 0)
-            except OSError:
+            except OSError :
                 log_info("pid %d not found, continuing" % pid)
-            else:
+            else :
                 log_info("pid %d is still running, exiting" % pid)
                 sys.exit()
-    except IOError as e:
+    except IOError as e :
         pass
     file(pidfile,'w').write(str(os.getpid())+'\n')
 
     # READ GLOBAL OPTIONS
 
     globalConfig = '/etc/greenback'
-    if os.path.isfile(globalConfig):
+    if os.path.isfile(globalConfig) :
         log_debug("reading global config file '"+globalConfig+"'")
         rawConfig = cfgfile_to_dict(globalConfig)
         # STRING OPTIONS
@@ -715,16 +716,16 @@ def main():
         setParmInt(globalConfig,rawConfig,'cycleSec',defaults,'cycleSec')
         setParmInt(globalConfig,rawConfig,'keepCount',defaults,'keepCount')
 
-        if len(rawConfig) > 0:
-            for key in rawConfig.keys():
+        if len(rawConfig) > 0 :
+            for key in rawConfig.keys() :
                 log_error("unknown parameter '"+key+"' in '"+globalConfig+"'")
             sys.exit(1)
-    else:
+    else :
         log_debug("no config file '"+globalConfig+"', using defaults")
 
     # SANITY CHECK
 
-    if os.path.isdir(defaults['topDir']) == False:
+    if os.path.isdir(defaults['topDir']) == False :
         log_debug("top level backup directory '"+defaults['topDir']+"' not found")
         sys.exit(1)
 
@@ -734,7 +735,7 @@ def main():
 
     # LOOP FOREVER, WORK AND SLEEP
 
-    while True:
+    while True :
         do_single_pass()
 
     # CLEAN UP
@@ -744,7 +745,7 @@ def main():
 
 #-----------------------------------------------------------
 
-if __name__ == "__main__":
+if __name__ == "__main__" :
      main()
 
 
