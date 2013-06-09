@@ -290,6 +290,7 @@ def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
     if cfgIdx not in cfgHash: return False
     volHash[volIdx] = cfgHash[cfgIdx]
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> STRING >> '+volIdx+'='+volHash[volIdx])
+    del cfgHash[cfgIdx]
     return True
 
 #-----------------------------------------------------------
@@ -298,6 +299,7 @@ def setParmInt(cfgFile,cfgHash,cfgIdx,volHash,volIdx,multiplier=1):
     if cfgIdx not in cfgHash: return False
     volHash[volIdx] = int(cfgHash[cfgIdx]) * multiplier
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> INT >> '+volIdx+'='+str(volHash[volIdx]))
+    del cfgHash[cfgIdx]
     return True
 
 #-----------------------------------------------------------
@@ -309,6 +311,7 @@ def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
     else:
         volHash[volIdx] = False
     log_info(' - '+cfgFile+': '+cfgIdx+'='+cfgHash[cfgIdx]+' >> BOOL >> '+volIdx+'='+( 'TRUE' if volHash[volIdx] else 'FALSE'))
+    del cfgHash[cfgIdx]
     return True
 
 #-----------------------------------------------------------
@@ -362,6 +365,12 @@ def buildJobTable():
                 setParmInt(configFilename,rawconfig,'keepCount',job,'keepCount')
                 # BOOLEAN OPTIONS
                 setParmBool(configFilename,rawconfig,'disabled',job,'disabled')
+
+                if len(rawconfig) > 0:
+                    for key in rawconfig.keys():
+                        log_error("unknown parameter '"+key+"' in '"+configFilename+"'")
+                    sys.exit(1)
+
             else:
                 log_debug("no config file '"+configFilename+"'")
 
