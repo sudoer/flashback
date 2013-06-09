@@ -63,7 +63,7 @@ maxAge = 10000000
 sleepMin = 10
 # defaults (global)
 defaults = {}
-defaults['topDir'] = '/flashback'
+defaults['topDir'] = '/greenback'
 defaults['lastBackupTimestamp'] = datetime.datetime(1970,1,1)
 defaults['cycleSec'] = 24*60*60
 defaults['keepCount'] = 9
