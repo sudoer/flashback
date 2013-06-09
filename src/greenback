@@ -135,6 +135,12 @@ def jobfile_to_array(filename):
             else:
                 log_error('incomplete job '+','.join(['%s>%s' % (key, value) for (key, value) in sanitizedJob.items()]) )
 
+        # IF THE JOB CONTAINS ERRORS, THEN STOP
+        if len(rawJob) > 0:
+            for key in rawJob.keys():
+                log_error("unknown job parameter '"+key+"' in '"+filename+"'")
+            sys.exit(1)
+
     log_debug('end of '+filename)
     return sanitizedJobs
 
