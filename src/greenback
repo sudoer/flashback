@@ -21,8 +21,8 @@ NOW
 [x] top-level config file - change from import to config format
 [x] top-level config file - move to /etc
 [x] config file - allow comments
-[ ] config file - user-defined "topdir"
-[ ] config file - default cycle times, labels
+[x] config file - user-defined "topdir"
+[x] config file - default cycle times, labels
 [ ] rsyncOpts does not work
 
 LATER
@@ -40,19 +40,12 @@ import sys
 from optparse import OptionParser
 import time
 import shutil
-# from configobj import ConfigObj         # apt-get install python-configobj
 import imp
 import errno
 
 
 #-----------------------------------------------------------
-#  C L A S S E S
-#-----------------------------------------------------------
-
-class DefaultsClass:
-    def __init__ (self, *argv, **argd):
-        self.__dict__.update (argd)
-
+#  H E L P E R   C L A S S E S
 #-----------------------------------------------------------
 
 def enum(*sequential, **named):
@@ -65,16 +58,18 @@ def enum(*sequential, **named):
 
 # globals
 programName = 'greenback'
-topdir = '/backup'
 libdir = '/var/lib/'+programName
 maxAge = 10000000
 sleepMin = 10
-# defaults (globals)
-class defaults (DefaultsClass):
-    lastBackupTimestamp = datetime.datetime(1970,1,1)
-    cycleSec = 24*60*60
-    keepCount = 9
-    label = 'daily'
+# defaults (global)
+defaults = {}
+defaults['topDir'] = '/flashback'
+defaults['lastBackupTimestamp'] = datetime.datetime(1970,1,1)
+defaults['cycleSec'] = 24*60*60
+defaults['keepCount'] = 9
+defaults['label'] = 'daily'
+defaults['tool'] = 'rsync'
+defaults['rsyncOpts'] = ''
 # plumbing (globals)
 options = ()
 g_logFD = None
@@ -84,11 +79,11 @@ status = enum('UNKNOWN', 'NOT_READY', 'READY', 'SUCCEEDED', 'FAILED', 'DISABLED'
 
 def jobfile_to_array(filename):
     try:
-        log_debug("config file '"+filename+"' found")
+        log_debug("job file '"+filename+"' found")
         configFilePtr = open( filename, "r" )
     except OSError:
-        log_debug("config file '"+filename+"' not found")
-        pass
+        log_debug("job file '"+filename+"' not found")
+        sys.exit(1)
 
     # MAKE BASIC ENTRIES IN THE 'jobInfo' DICTIONARY FROM /etc/greenback.jobs
 
@@ -128,7 +123,7 @@ def jobfile_to_array(filename):
         setParmBool(filename,rawJob,'disabled',sanitizedJob,'disabled')
 
         # IF THE JOB INFO IS COMPLETE, THEN SAVE IT
-        if len(sanitizedJob) > 0 :
+        if len(sanitizedJob) > 0:
             if req1 and req2 and req3:
                 log_debug('sanitizedJob:'+','.join(['%s>%s' % (key, value) for (key, value) in sanitizedJob.items()]) )
                 sanitizedJobs.append(sanitizedJob)
@@ -164,8 +159,8 @@ def cfgfile_to_dict(filename):
         if len(line) == 0:
             continue
         if line.find('=') == -1:
-            log_error('unknown config file option in '+filename+' > '+line)
-            continue
+            log_error('syntax error in config file '+filename+' > '+line)
+            sys.exit(1)
         log_debug(filename+": "+line)
         (key,eq,value) = line.partition('=')
         key = key.strip()
@@ -269,8 +264,8 @@ def write_status(doing,waitTime,target):
     statusFile.write('status='+doing+'\n')
     if target is None: target=''
     statusFile.write('target='+target+'\n')
-    (total, used, free) = disk_usage(topdir)
-    statusFile.write('disk.mntpt='+topdir+'\n')
+    (total, used, free) = disk_usage(defaults['topDir'])
+    statusFile.write('disk.mntpt='+defaults['topDir']+'\n')
     statusFile.write('disk.total='+str(total)+'\n')
     statusFile.write('disk.used='+str(used)+'\n')
     statusFile.write('disk.free='+str(free)+'\n')
@@ -336,12 +331,9 @@ def buildJobTable():
         job['status'] = status.UNKNOWN
         job['lastBackupDurationSec'] = 0
         # set some defaults - only if not set in main jobs config file (TODO: change this ???)
-        if 'label' not in job: job['label'] = defaults.label
-        if 'cycleSec' not in job: job['cycleSec'] = defaults.cycleSec
-        if 'keepCount' not in job: job['keepCount'] = defaults.keepCount
+        for i in ['label','cycleSec','keepCount','tool','rsyncOpts']:
+            if i not in job: job[i] = defaults[i]
         if 'disabled' not in job: job['disabled'] = False
-        if 'tool' not in job: job['tool'] = 'rsync'
-        if 'rsyncOpts' not in job: job['rsyncOpts'] = ''
 
         # set an index to refer to this entry by
         index = job['host']+'-'+job['volume']+'-'+job['label']
@@ -349,31 +341,31 @@ def buildJobTable():
 
         # build a list of several optional config files to look for
         configFilenames=[]
-        configFilenames.append(topdir+'/config') # /backup/config
-        configFilenames.append(topdir+'/'+job['host']+'/config') # /backup/host/config
-        configFilenames.append(topdir+'/'+job['host']+'/'+job['volume']+'/config') # /backup/host/volume/config
+        configFilenames.append(defaults['topDir']+'/config') # /backup/config
+        configFilenames.append(defaults['topDir']+'/'+job['host']+'/config') # /backup/host/config
+        configFilenames.append(defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/config') # /backup/host/volume/config
 
         for configFilename in configFilenames:
             # read the config files if they exist
             if os.path.isfile(configFilename):
                 log_debug("reading config file '"+configFilename+"'")
-                rawconfig = cfgfile_to_dict(configFilename)
+                rawConfig = cfgfile_to_dict(configFilename)
                 # STRING OPTIONS
-                setParmString(configFilename,rawconfig,'src',job,'src')
-                setParmString(configFilename,rawconfig,'label',job,'label')
-                setParmString(configFilename,rawconfig,'rsyncOpts',job,'rsyncOpts')
-                setParmString(configFilename,rawconfig,'tool',job,'tool')
+                setParmString(configFilename,rawConfig,'src',job,'src')
+                setParmString(configFilename,rawConfig,'label',job,'label')
+                setParmString(configFilename,rawConfig,'rsyncOpts',job,'rsyncOpts')
+                setParmString(configFilename,rawConfig,'tool',job,'tool')
                 # NUMBER OPTIONS
-                setParmInt(configFilename,rawconfig,'cycleDay',job,'cycleSec',86400)
-                setParmInt(configFilename,rawconfig,'cycleHour',job,'cycleSec',3600)
-                setParmInt(configFilename,rawconfig,'cycleMin',job,'cycleSec',60)
-                setParmInt(configFilename,rawconfig,'cycleSec',job,'cycleSec')
-                setParmInt(configFilename,rawconfig,'keepCount',job,'keepCount')
+                setParmInt(configFilename,rawConfig,'cycleDay',job,'cycleSec',86400)
+                setParmInt(configFilename,rawConfig,'cycleHour',job,'cycleSec',3600)
+                setParmInt(configFilename,rawConfig,'cycleMin',job,'cycleSec',60)
+                setParmInt(configFilename,rawConfig,'cycleSec',job,'cycleSec')
+                setParmInt(configFilename,rawConfig,'keepCount',job,'keepCount')
                 # BOOLEAN OPTIONS
-                setParmBool(configFilename,rawconfig,'disabled',job,'disabled')
+                setParmBool(configFilename,rawConfig,'disabled',job,'disabled')
 
-                if len(rawconfig) > 0:
-                    for key in rawconfig.keys():
+                if len(rawConfig) > 0:
+                    for key in rawConfig.keys():
                         log_error("unknown parameter '"+key+"' in '"+configFilename+"'")
                     sys.exit(1)
 
@@ -381,14 +373,14 @@ def buildJobTable():
                 log_debug("no config file '"+configFilename+"'")
 
         # Get the creation time of the daily.1 directory, if it exists.
-        recentBackup = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1'
+        recentBackup = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1'
         # Note: ctime() does not refer to creation time on *nix systems,
         # but rather the last time the inode data changed.
         if os.path.exists(recentBackup):
             mtime = os.path.getmtime(recentBackup)
             job['lastBackupTimestamp'] = datetime.datetime.fromtimestamp(mtime)
         else:
-            job['lastBackupTimestamp'] = defaults.lastBackupTimestamp
+            job['lastBackupTimestamp'] = defaults['lastBackupTimestamp']
 
     return jobInfo
 
@@ -495,7 +487,7 @@ def do_rsync_backup(job):
     write_status('backup',0,job['index'])
 
     # if this is our first time, create a host/volume directory
-    mkdir_p(topdir+'/'+job['host']+'/'+job['volume'])
+    mkdir_p(defaults['topDir']+'/'+job['host']+'/'+job['volume'])
 
     args = [
         '-al',
@@ -506,14 +498,14 @@ def do_rsync_backup(job):
         '--one-file-system',
 #       '-v',
 #       '--stats',
-        '--link-dest='+topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1',
+        '--link-dest='+defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1',
     ]
     userArgs = job['rsyncOpts'].split(' ')
     src = job['src']
-    dest = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
+    dest = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
 
     # optional - "excludes" file
-    excludes = topdir+'/'+job['host']+'/'+job['volume']+'/excludes'
+    excludes = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/excludes'
     log_debug('testing for ['+excludes+']')
     if os.path.isfile(excludes):
         log_debug('"excludes" file found, adding argument')
@@ -547,7 +539,7 @@ def do_rsync_backup(job):
     log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
 
     if complete:
-        prefix = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+        prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
         if os.path.isdir(prefix+'0'):
             # "touch" the timestamp
             os.utime(prefix+'0',None)
@@ -567,11 +559,11 @@ def do_cp_backup(job):
     write_status('backup',0,job['index'])
 
     # if this is our first time, create a host/volume directory
-    mkdir_p(topdir+'/'+job['host']+'/'+job['volume'])
+    mkdir_p(defaults['topDir']+'/'+job['host']+'/'+job['volume'])
 
     args = ['-alf']
     src = job['src']
-    dest = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
+    dest = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
 
     cmd = ['/bin/cp'] + args + [src, dest]
     log_info('running >> '+(','.join(cmd)))
@@ -582,7 +574,7 @@ def do_cp_backup(job):
     log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
 
     if complete:
-        prefix = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+        prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
         if os.path.isdir(prefix+'0'):
             # "touch" the timestamp
             os.utime(prefix+'0',None)
@@ -600,7 +592,7 @@ def do_cp_backup(job):
 def rotate(job):
 
     write_status('rotate',0,job['index'])
-    prefix = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+    prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
 
     # rotate the numbered backups
     if os.path.isdir(prefix+str(job['keepCount'])):
@@ -617,7 +609,7 @@ def rotate(job):
 
 def discard(job):
 
-    prefix = topdir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+    prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
     if os.path.isdir(prefix+'0'):
         write_status('discard',0,job['index'])
         log_debug('removing 0')
@@ -704,6 +696,37 @@ def main():
     except IOError as e:
         pass
     file(pidfile,'w').write(str(os.getpid())+'\n')
+
+    # READ GLOBAL OPTIONS
+
+    globalConfig = '/etc/greenback'
+    if os.path.isfile(globalConfig):
+        log_debug("reading global config file '"+globalConfig+"'")
+        rawConfig = cfgfile_to_dict(globalConfig)
+        # STRING OPTIONS
+        setParmString(globalConfig,rawConfig,'topDir',defaults,'topDir')
+        setParmString(globalConfig,rawConfig,'label',defaults,'label')
+        setParmString(globalConfig,rawConfig,'rsyncOpts',defaults,'rsyncOpts')
+        setParmString(globalConfig,rawConfig,'tool',defaults,'tool')
+        # NUMBER OPTIONS
+        setParmInt(globalConfig,rawConfig,'cycleDay',defaults,'cycleSec',86400)
+        setParmInt(globalConfig,rawConfig,'cycleHour',defaults,'cycleSec',3600)
+        setParmInt(globalConfig,rawConfig,'cycleMin',defaults,'cycleSec',60)
+        setParmInt(globalConfig,rawConfig,'cycleSec',defaults,'cycleSec')
+        setParmInt(globalConfig,rawConfig,'keepCount',defaults,'keepCount')
+
+        if len(rawConfig) > 0:
+            for key in rawConfig.keys():
+                log_error("unknown parameter '"+key+"' in '"+globalConfig+"'")
+            sys.exit(1)
+    else:
+        log_debug("no config file '"+globalConfig+"', using defaults")
+
+    # SANITY CHECK
+
+    if os.path.isdir(defaults['topDir']) == False:
+        log_debug("top level backup directory '"+defaults['topDir']+"' not found")
+        sys.exit(1)
 
     # SET UP SUPPORT/STATUS DIRECTORY
 
