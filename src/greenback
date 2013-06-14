@@ -73,7 +73,7 @@ defaults['rsyncOpts'] = ''
 # plumbing (globals)
 options = ()
 g_logFD = None
-status = enum('UNKNOWN', 'NOT_READY', 'READY', 'SUCCEEDED', 'FAILED', 'DISABLED')
+status = enum('UNKNOWN', 'NOT_READY', 'READY', 'WORKING', 'ROTATING', 'SUCCEEDED', 'FAILED', 'DISABLED')
 
 #-----------------------------------------------------------
 
@@ -253,27 +253,6 @@ def mkdir_p(path) :
 
 #-----------------------------------------------------------
 
-def write_status(doing,waitTime,target) :
-    log_debug('writing status file')
-    statusFileName = libdir+'/status'
-    statusFile = file(statusFileName,'w')
-    now = datetime.datetime.now()
-    statusFile.write('date='+datetime.datetime.strftime(now,'%Y-%m-%d')+'\n')
-    statusFile.write('time='+datetime.datetime.strftime(now,'%H:%M:%S')+'\n')
-    statusFile.write('pid='+str(os.getpid())+'\n')
-    statusFile.write('wait='+str(waitTime)+'\n')
-    statusFile.write('status='+doing+'\n')
-    if target is None : target=''
-    statusFile.write('target='+target+'\n')
-    (total, used, free) = disk_usage(defaults['topDir'])
-    statusFile.write('disk.mntpt='+defaults['topDir']+'\n')
-    statusFile.write('disk.total='+str(total)+'\n')
-    statusFile.write('disk.used='+str(used)+'\n')
-    statusFile.write('disk.free='+str(free)+'\n')
-    statusFile.close()
-
-#-----------------------------------------------------------
-
 def disk_usage(path) :
     """Return disk usage statistics about the given path.
 
@@ -440,6 +419,8 @@ def formattedTable(jobs) :
             status.UNKNOWN :   '???',
             status.DISABLED :  'DISABLED',
             status.NOT_READY : 'NEXT RUN IN '+nextBackupInterval,
+            status.WORKING :   'BACKING UP',
+            status.ROTATING :  'ROTATING',
             status.READY :     'READY',
             status.SUCCEEDED : 'SUCCEEDED ('+lastBackupDurationSec+')',
             status.FAILED :    'FAILED ('+lastBackupDurationSec+')',
@@ -452,23 +433,47 @@ def formattedTable(jobs) :
             + str(job['cycleSec']).ljust(widths['cycleSec']) + '   '
             + switch[job['status']]
         )
-
     return table
 
 #-----------------------------------------------------------
 
-def tableToLogAndDisk(activity,jobInfo) :
+def reportStatusAndQueue(shortAction,longAction,target,waitTime,jobInfo) :
+
+    # CREATE A SMALL STATUS FILE
+
+    log_debug('writing status file')
+    statusFileName = libdir+'/status'
+    statusFile = file(statusFileName,'w')
+    now = datetime.datetime.now()
+    # show time, date and PID - so we know that the info is current
+    statusFile.write('date='+datetime.datetime.strftime(now,'%Y-%m-%d')+'\n')
+    statusFile.write('time='+datetime.datetime.strftime(now,'%H:%M:%S')+'\n')
+    statusFile.write('pid='+str(os.getpid())+'\n')
+    # show what we're doing (a verb)
+    statusFile.write('status='+shortAction+'\n')
+    # show what we're doing it to (an object)
+    if target is None : target=''
+    statusFile.write('target='+target+'\n')
+    # show how long we'll do it (only if we're sleeping)
+    statusFile.write('wait='+str(waitTime)+'\n')
+    # show disk usage info
+    (total, used, free) = disk_usage(defaults['topDir'])
+    statusFile.write('disk.mntpt='+defaults['topDir']+'\n')
+    statusFile.write('disk.total='+str(total)+'\n')
+    statusFile.write('disk.used='+str(used)+'\n')
+    statusFile.write('disk.free='+str(free)+'\n')
+    statusFile.close()
 
     # CREATE A FORMATTED TABLE
 
     table = formattedTable(jobInfo)
     date = datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')
 
-    # DUMP THE SORTED LIST IN A TEXT FILE
+    # DUMP THE SORTED LIST INTO THE QUEUE FILE
 
     tableFileName = libdir+'/queue'
     tableFile = file(tableFileName,'w')
-    tableFile.write(date+' : '+activity+'\n')
+    tableFile.write(date+' : '+longAction+'\n')
     tableFile.write('\n')
     for line in table :
         tableFile.write(line+'\n')
@@ -476,7 +481,7 @@ def tableToLogAndDisk(activity,jobInfo) :
 
     # SHOW THE SORTED LIST IN THE LOG
 
-    log_info(date+' : '+activity)
+    log_info(date+' : '+longAction)
     for line in table :
         log_info(line)
     log_info('')
@@ -484,8 +489,6 @@ def tableToLogAndDisk(activity,jobInfo) :
 #-----------------------------------------------------------
 
 def do_rsync_backup(job) :
-
-    write_status('backup',0,job['index'])
 
     # if this is our first time, create a host/volume directory
     mkdir_p(defaults['topDir']+'/'+job['host']+'/'+job['volume'])
@@ -557,8 +560,6 @@ def do_rsync_backup(job) :
 
 def do_cp_backup(job) :
 
-    write_status('backup',0,job['index'])
-
     # if this is our first time, create a host/volume directory
     mkdir_p(defaults['topDir']+'/'+job['host']+'/'+job['volume'])
 
@@ -592,7 +593,6 @@ def do_cp_backup(job) :
 
 def rotate(job) :
 
-    write_status('rotate',0,job['index'])
     prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
 
     # rotate the numbered backups
@@ -612,7 +612,6 @@ def discard(job) :
 
     prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
     if os.path.isdir(prefix+'0') :
-        write_status('discard',0,job['index'])
         log_debug('removing 0')
         shutil.rmtree(prefix+'0')
 
@@ -620,10 +619,10 @@ def discard(job) :
 
 def do_single_pass() :
 
-    write_status('thinking',0,None)
+    #write_status('thinking',0,None)
     jobs = buildJobTable()
     jobs = updateAgesAndSort(jobs)
-    tableToLogAndDisk('thinking',jobs)
+    reportStatusAndQueue('thinking', 'thinking...', None, 0, jobs)
 
     # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
 
@@ -631,21 +630,30 @@ def do_single_pass() :
     for job in jobs :
         if job['ageSec'] < job['cycleSec'] : continue
         if job['disabled'] : continue
-        tableToLogAndDisk("backing up '"+job['index']+"'", jobs)
+        # We're going to try to back up this job.
+        index = job['index']
+        job['status'] = status.WORKING
+        reportStatusAndQueue('backup', "backing up '"+index+"'", index, 0, jobs)
         startTime = datetime.datetime.now()
         if job['tool'] == 'rsync' :
             if do_rsync_backup(job) :
-                job['status'] = status.SUCCEEDED
+                job['status'] = status.ROTATING
+                reportStatusAndQueue('rotate', "rotating '"+index+"'", index, 0, jobs)
                 rotate(job)
+                job['status'] = status.SUCCEEDED
             else : # not complete
                 job['status'] = status.FAILED
+                reportStatusAndQueue('discard', "discarding '"+index+"'", index, 0, jobs)
                 discard(job)
         elif job['tool'] == 'cp' :
             if do_cp_backup(job) :
-                job['status'] = status.SUCCEEDED
+                job['status'] = status.ROTATING
+                reportStatusAndQueue('rotate', "rotating '"+index+"'", index, 0, jobs)
                 rotate(job)
+                job['status'] = status.SUCCEEDED
             else : # not complete
                 job['status'] = status.FAILED
+                reportStatusAndQueue('discard', "discarding '"+index+"'", index, 0, jobs)
                 discard(job)
         endTime = datetime.datetime.now()
         job['lastBackupDurationSec'] = (endTime - startTime).seconds
@@ -655,9 +663,8 @@ def do_single_pass() :
 
     # sleep for a little bit
     for i in range(sleepMin,0,-1) :
-        write_status('idle',i,None)
         jobs = updateAgesAndSort(jobs)
-        tableToLogAndDisk('sleeping '+str(i)+' min',jobs)
+        reportStatusAndQueue('idle', 'sleeping '+str(i)+' min', None, i, jobs)
         time.sleep(60)
 
 #-----------------------------------------------------------
