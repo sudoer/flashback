@@ -439,11 +439,13 @@ def formattedTable(jobs) :
 
 def reportStatusAndQueue(shortAction,longAction,target,waitTime,jobInfo) :
 
+    log_debug('writing status file and queue file')
+    suffix = str(os.getpid())
+
     # CREATE A SMALL STATUS FILE
 
-    log_debug('writing status file')
     statusFileName = libdir+'/status'
-    statusFile = file(statusFileName,'w')
+    statusFile = file(statusFileName+suffix,'w')
     now = datetime.datetime.now()
     # show time, date and PID - so we know that the info is current
     statusFile.write('date='+datetime.datetime.strftime(now,'%Y-%m-%d')+'\n')
@@ -471,13 +473,18 @@ def reportStatusAndQueue(shortAction,longAction,target,waitTime,jobInfo) :
 
     # DUMP THE SORTED LIST INTO THE QUEUE FILE
 
-    tableFileName = libdir+'/queue'
-    tableFile = file(tableFileName,'w')
-    tableFile.write(date+' : '+longAction+'\n')
-    tableFile.write('\n')
+    queueFileName = libdir+'/queue'
+    queueFile = file(queueFileName+suffix,'w')
+    queueFile.write(date+' : '+longAction+'\n')
+    queueFile.write('\n')
     for line in table :
-        tableFile.write(line+'\n')
-    tableFile.close()
+        queueFile.write(line+'\n')
+    queueFile.close()
+
+    # ATOMIC WRITE
+
+    os.rename(statusFileName+suffix, statusFileName)
+    os.rename(queueFileName+suffix, queueFileName)
 
     # SHOW THE SORTED LIST IN THE LOG
 
