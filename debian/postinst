@@ -1,9 +1,9 @@
 #!/bin/sh
 
-if [ -x "/etc/init.d/greenback" ]; then
-    if [ ! -e "/etc/init/greenback.conf" ]; then
-        update-rc.d greenback defaults >/dev/null
+if [ -x "/etc/init.d/flashback" ]; then
+    if [ ! -e "/etc/init/flashback.conf" ]; then
+        update-rc.d flashback defaults >/dev/null
     fi
-    invoke-rc.d greenback start || exit $?
+    invoke-rc.d flashback start || exit $?
 fi
 

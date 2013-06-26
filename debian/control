@@ -1,26 +1,26 @@
-Source: greenback
+Source: flashback
 Section: admin
 Priority: extra
 Maintainer: Alan Porter <alan.porter@sentosa.us>
 Build-Depends: debhelper (>= 8.0.0)
 Standards-Version: 3.9.3
-Homepage: http://AlanPorter.com/greenback
-#Vcs-Git: git://git.debian.org/collab-maint/greenback.git
-#Vcs-Browser: http://git.debian.org/?p=collab-maint/greenback.git;a=summary
+Homepage: http://AlanPorter.com/flashback
+#Vcs-Git: git://git.debian.org/collab-maint/flashback.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/flashback.git;a=summary
 
-Package: greenback
+Package: flashback
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${misc:Depends}, ${python:Depends}
 Description: Greenback is an rsync-based backup daemon.
- Greenback makes rotating backups of remote filesystems using the "rsync"
+ Flashback makes rotating backups of remote filesystems using the "rsync"
  utility.  It runs as a daemon, waking up every so often to see which sources
  need backing up.  If the last backup is at least "a day" old (configurable
  globally or per source), it will connect and start backing up.  Rsync is very
  efficient, because it only copies files that have changed.  Furthermore,
- Greenback uses rsync's "link-dest" option to use hard links so it only has
- a single copy of an unchanged file across several backups.  The resulting
- backup is identical to the source, having the same file structure, permissions,
- ownerships and time stamps as the source.  This daemon started as a wrapper
- around "rsback" (http://www.pollux.franken.de/en/backup/rsback/), but later
- I found that I was not really using any of rsback's features, and so I modified
- it to just call rsync directly.
+ Greenback uses rsync's "link-dest" option to use hard links so it only has a
+ single copy of an unchanged file across several backups.  The resulting backup
+ is identical to the source, having the same file structure, permissions,
+ ownerships and time stamps as the source.  This project started out as a
+ wrapper around "rsback" (http://www.pollux.franken.de/en/backup/rsback/), but
+ later I found that I was not really using any of rsback's features, and so I
+ modified it into a stand-alone daemon that just calls rsync directly.

@@ -57,13 +57,13 @@ def enum(*sequential, **named) :
 #-----------------------------------------------------------
 
 # globals
-programName = 'greenback'
+programName = 'flashback'
 libdir = '/var/lib/'+programName
 maxAge = 10000000
 sleepMin = 10
 # defaults (global)
 defaults = {}
-defaults['topDir'] = '/greenback'
+defaults['topDir'] = '/flashback'
 defaults['lastBackupTimestamp'] = datetime.datetime(1970,1,1)
 defaults['cycleSec'] = 24*60*60
 defaults['keepCount'] = 9
@@ -85,7 +85,7 @@ def jobfile_to_array(filename) :
         log_debug("job file '"+filename+"' not found")
         sys.exit(1)
 
-    # MAKE BASIC ENTRIES IN THE 'jobInfo' DICTIONARY FROM /etc/greenback.jobs
+    # MAKE BASIC ENTRIES IN THE 'jobInfo' DICTIONARY FROM /etc/flashback.jobs
 
     sanitizedJobs = []
     for line in configFilePtr :
@@ -299,7 +299,7 @@ def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx) :
 
 def buildJobTable() :
 
-    jobInfo = jobfile_to_array('/etc/greenback.jobs')
+    jobInfo = jobfile_to_array('/etc/flashback.jobs')
 
     # FILL IN THE 'jobInfo' DICTIONARY FROM DEFAULTS AND MORE CONFIGS
 
@@ -714,7 +714,7 @@ def main() :
 
     # READ GLOBAL OPTIONS
 
-    globalConfig = '/etc/greenback'
+    globalConfig = '/etc/flashback.conf'
     if os.path.isfile(globalConfig) :
         log_debug("reading global config file '"+globalConfig+"'")
         rawConfig = cfgfile_to_dict(globalConfig)

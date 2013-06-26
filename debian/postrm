@@ -4,10 +4,10 @@
 
 case "$1" in
   purge)
-    rm -rf /var/lib/greenback 2> /dev/null
-    rm -f /var/run/greenback.pid 2> /dev/null
-    #rm -f /var/log/greenback.log 2> /dev/null
-    update-rc.d greenback remove >/dev/null
+    rm -rf /var/lib/flashback 2> /dev/null
+    rm -f /var/run/flashback.pid 2> /dev/null
+    #rm -f /var/log/flashback.log 2> /dev/null
+    update-rc.d flashback remove >/dev/null
     ;;
 esac
 

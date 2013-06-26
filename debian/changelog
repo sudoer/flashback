@@ -1,5 +1,13 @@
+flashback (0.2) unstable; urgency=low
+
+  * name changed to 'flashback'
+  * global config file, fairly rich per-volume configs, works well
+
+ -- Alan Porter <alan.porter@sentosa.us>  Tue, 26 Jun 2013 20:28:07 -0400
+
 greenback (0.1) unstable; urgency=low
 
   * Initial Release.
 
  -- Alan Porter <alan.porter@sentosa.us>  Tue, 26 Mar 2013 18:59:34 -0400
+

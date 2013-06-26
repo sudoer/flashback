@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if [ -x "/etc/init.d/greenback" ]; then
-    invoke-rc.d greenback stop || exit $?
+if [ -x "/etc/init.d/flashback" ]; then
+    invoke-rc.d flashback stop || exit $?
 fi
 

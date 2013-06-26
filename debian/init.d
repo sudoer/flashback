@@ -1,25 +1,25 @@
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          greenback
-# Required-Start:    $network $local_fs
-# Required-Stop:
+# Provides:          flashback
+# Required-Start:    $network $local_fs $remote_fs
+# Required-Stop:     $remote_fs
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: <Enter a short description of the software>
-# Description:       <Enter a long description of the software>
-#                    <...>
-#                    <...>
+# Short-Description: Rsync-based backup daemon.
+# Description:       An rsync-based backup daemon.  Makes use of
+#                    hard-linking "link-dest" option to make thorough
+#                    backups quickly and without wasting disk space.
 ### END INIT INFO
 
 # Author: Alan Porter <alan.porter@sentosa.us>
 
 # PATH should only include /usr/* if it runs after the mountnfs.sh script
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
-DESC=greenback             # Introduce a short description here
-NAME=greenback             # Introduce the short server's name here
+DESC=flashback             # Introduce a short description here
+NAME=flashback             # Introduce the short server's name here
 PYTHON=/usr/bin/python
 PYOPTS="-B"
-DAEMON=/usr/sbin/greenback # Introduce the server's location here
+DAEMON=/usr/sbin/flashback # Introduce the server's location here
 DAEMON_ARGS="-q"           # Arguments to run the daemon with
 PIDFILE=/var/run/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-status_file="/var/lib/greenback/status"
+status_file="/var/lib/flashback/status"
 
 function led_on () {
    echo "default-on" > /sys/class/leds/plug\:green\:health/trigger
@@ -30,7 +30,7 @@ while true ; do
    pid=$(grep '^pid=' $tmp | awk -F= '{print $2}')
    stat=$(grep '^status=' $tmp | awk -F= '{print $2}')
    rm $tmp
-   if [ $(cat /dev/null /proc/$pid/cmdline 2>/dev/null | grep -c 'greenback') -eq 0 ] ; then
+   if [ $(cat /dev/null /proc/$pid/cmdline 2>/dev/null | grep -c 'flashback') -eq 0 ] ; then
       stat='down'
    fi
    case $stat in
