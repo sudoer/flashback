@@ -9,6 +9,7 @@ clean:
 
 install:
 	install -D -o root -g root -m 0755 src/flashback $(DESTDIR)/usr/sbin/flashback
+	for f in flashback.conf flashback.jobs monitor-local.sh monitor-remote.sh ; do install -D -o root -g root -m 0644 examples/$$f $(DESTDIR)/usr/share/doc/flashback/examples/$$f ; done
 
 #-------------------------------------------------------------------------------
 
