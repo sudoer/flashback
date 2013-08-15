@@ -25,6 +25,8 @@ NOW
 [ ] test start/stop/install/uninstall
 [ ] rsyncOpts does not work
 [ ] when ping fails, set status to NOTFOUND, not FAILED
+[ ] document - main config file options, overriding options in specific sub-config files
+[ ] document - how to install (if you're not on a debian system)
 
 LATER
 ~~~~~
