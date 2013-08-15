@@ -5,29 +5,31 @@ TODO LIST
 
 NOW
 ~~~
-[?] snazzy name
+[x] snazzy name = flashback (was greenback, was sheevabackup)
 [x] config files (global, per machine, per share)
 [x] use rsync instead of rsback
 [x] rotate backups myself
 [x] plug-in to allow LED blinking
 [x] store status in a file
 [x] debian package
-[ ] push to github
-[ ] write summary info to a per-backup status/history file (sqlite?)
+[x] push to github
 [x] second-level backups
-[ ] bug?? : failures (half-copies) still update daily.1 timestamp
-[ ] install monitor.sh in examples
-[ ] test start/stop/install/uninstall
 [x] top-level config file - change from import to config format
 [x] top-level config file - move to /etc
 [x] config file - allow comments
 [x] config file - user-defined "topdir"
 [x] config file - default cycle times, labels
+[ ] write summary info to a per-backup status/history file (sqlite?)
+[ ] bug?? : failures (half-copies) still update daily.1 timestamp
+[ ] debian package installs monitor.sh in examples
+[ ] test start/stop/install/uninstall
 [ ] rsyncOpts does not work
+[ ] when ping fails, set status to NOTFOUND, not FAILED
 
 LATER
 ~~~~~
-audit runs after backup, compares "new" and "large" files to yesterday's large files, compares md5, creates hard links
+deduplication - audit runs after backup, compares "new" and "large" files to yesterday's
+   large files, compares md5, creates hard links
 """
 
 import os
