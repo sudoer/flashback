@@ -24,7 +24,7 @@ NOW
 [ ] debian package installs monitor.sh in examples
 [ ] test start/stop/install/uninstall
 [ ] rsyncOpts does not work
-[ ] when ping fails, set status to NOTFOUND, not FAILED
+[x] when ping fails, set status to NOTFOUND, not FAILED
 [ ] document - main config file options, overriding options in specific sub-config files
 [ ] document - how to install (if you're not on a debian system)
 
@@ -46,7 +46,6 @@ import time
 import shutil
 import imp
 import errno
-
 
 #-----------------------------------------------------------
 #  H E L P E R   C L A S S E S
@@ -77,7 +76,7 @@ defaults['rsyncOpts'] = ''
 # plumbing (globals)
 options = ()
 g_logFD = None
-status = enum('UNKNOWN', 'NOT_READY', 'READY', 'WORKING', 'ROTATING', 'SUCCEEDED', 'FAILED', 'DISABLED')
+status = enum('UNKNOWN', 'NOT_READY', 'READY', 'NOT_FOUND', 'WORKING', 'ROTATING', 'SUCCEEDED', 'FAILED', 'DISABLED')
 
 #-----------------------------------------------------------
 
@@ -243,6 +242,11 @@ def sec2dhms(s) :
     mins = s // 60     ; s = s - (mins * 60)
     secs = s
     return (days, hours, mins, secs)
+
+#-----------------------------------------------------------
+
+def ping(host) :
+    return True if ( shell_do(['ping','-c1',host]) == 0 ) else False
 
 #-----------------------------------------------------------
 
@@ -423,6 +427,7 @@ def formattedTable(jobs) :
             status.UNKNOWN :   '???',
             status.DISABLED :  'DISABLED',
             status.NOT_READY : 'NEXT RUN IN '+nextBackupInterval,
+            status.NOT_FOUND : 'NOT FOUND',
             status.WORKING :   'BACKING UP',
             status.ROTATING :  'ROTATING',
             status.READY :     'READY',
@@ -641,8 +646,14 @@ def do_single_pass() :
     for job in jobs :
         if job['ageSec'] < job['cycleSec'] : continue
         if job['disabled'] : continue
-        # We're going to try to back up this job.
+        # This is the name of our job, we'll use it a lot below.
         index = job['index']
+        # First try to ping the host before trying to back it up.
+        if ( ping(job['host']) == False ) :
+            job['status'] = status.NOT_FOUND
+            reportStatusAndQueue('missing', "'"+index+"' was not found", index, 0, jobs)
+            continue
+        # Try to back up this job.
         job['status'] = status.WORKING
         reportStatusAndQueue('backup', "backing up '"+index+"'", index, 0, jobs)
         startTime = datetime.datetime.now()
