@@ -51,8 +51,11 @@ import errno
 #  H E L P E R   C L A S S E S
 #-----------------------------------------------------------
 
+# http://stackoverflow.com/questions/36932/how-can-i-represent-an-enum-in-python
 def enum(*sequential, **named) :
     enums = dict(zip(sequential, range(len(sequential))), **named)
+    r_enums = dict((value, key) for key, value in enums.iteritems())
+    enums['reverse'] = r_enums
     return type('Enum', (), enums)
 
 #-----------------------------------------------------------
@@ -76,7 +79,8 @@ defaults['rsyncOpts'] = ''
 # plumbing (globals)
 options = ()
 g_logFD = None
-status = enum('UNKNOWN', 'NOT_READY', 'READY', 'NOT_FOUND', 'WORKING', 'ROTATING', 'SUCCEEDED', 'FAILED', 'DISABLED')
+jobStatus = enum('UNKNOWN', 'NOT_READY', 'READY', 'NOT_FOUND', 'BACKING_UP', 'ROTATING', 'SUCCEEDED', 'FAILED', 'DISABLED')
+myHealth = enum('IDLE', 'BACKING_UP', 'ROTATING', 'CLEANING')
 
 #-----------------------------------------------------------
 
@@ -316,7 +320,7 @@ def buildJobTable() :
         log_debug('job:'+','.join(['%s>%s' % (key, value) for (key, value) in job.items()]) )
 
         # set some defaults - always
-        job['status'] = status.UNKNOWN
+        job['status'] = jobStatus.UNKNOWN
         job['lastBackupDurationSec'] = 0
         # set some defaults - only if not set in main jobs config file (TODO: change this ???)
         for i in ['label','cycleSec','keepCount','tool','rsyncOpts'] :
@@ -388,12 +392,12 @@ def updateAgesAndSort(jobInfo) :
         if job['disabled'] : job['nextBackupSec'] = maxAge
 
     for job in jobInfo :
-        if job['status'] in (status.NOT_READY, status.UNKNOWN) :
+        if job['status'] in (jobStatus.NOT_READY, jobStatus.UNKNOWN) :
             # If "cycleSec" has transpired since our last backup, we're "ready".
-            if job['ageSec'] > job['cycleSec'] : job['status'] = status.READY
-            else : job['status'] = status.NOT_READY
+            if job['ageSec'] > job['cycleSec'] : job['status'] = jobStatus.READY
+            else : job['status'] = jobStatus.NOT_READY
         # No matter if "ready" or not, if disabled, don't back up.
-        if job['disabled']: job['status'] = status.DISABLED
+        if job['disabled']: job['status'] = jobStatus.DISABLED
 
     sortedJobs = sorted(jobInfo, key=operator.itemgetter('nextBackupSec'))
 
@@ -424,15 +428,15 @@ def formattedTable(jobs) :
         (d,h,m,s) = sec2dhms( job['lastBackupDurationSec'] )  # assume 0 days
         lastBackupDurationSec = '%d:%02d:%02d' % (h,m,s)
         switch = {
-            status.UNKNOWN :   '???',
-            status.DISABLED :  'DISABLED',
-            status.NOT_READY : 'NEXT RUN IN '+nextBackupInterval,
-            status.NOT_FOUND : 'NOT FOUND',
-            status.WORKING :   'BACKING UP',
-            status.ROTATING :  'ROTATING',
-            status.READY :     'READY',
-            status.SUCCEEDED : 'SUCCEEDED ('+lastBackupDurationSec+')',
-            status.FAILED :    'FAILED ('+lastBackupDurationSec+')',
+            jobStatus.UNKNOWN :    '???',
+            jobStatus.DISABLED :   'DISABLED',
+            jobStatus.NOT_READY :  'NEXT RUN IN '+nextBackupInterval,
+            jobStatus.NOT_FOUND :  'NOT FOUND',
+            jobStatus.BACKING_UP : 'BACKING UP',
+            jobStatus.ROTATING :   'ROTATING',
+            jobStatus.READY :      'READY',
+            jobStatus.SUCCEEDED :  'SUCCEEDED ('+lastBackupDurationSec+')',
+            jobStatus.FAILED :     'FAILED ('+lastBackupDurationSec+')',
         }
         lastBackupTimestampString = job['lastBackupTimestamp'].strftime('%Y-%m-%d %H:%M:%S')
         table.append(''
@@ -446,7 +450,7 @@ def formattedTable(jobs) :
 
 #-----------------------------------------------------------
 
-def reportStatusAndQueue(shortAction,longAction,target,waitTime,jobInfo) :
+def reportStatusAndQueue(health,activity,target,waitTime,jobInfo) :
 
     log_debug('writing status file and queue file')
     suffix = str(os.getpid())
@@ -461,7 +465,7 @@ def reportStatusAndQueue(shortAction,longAction,target,waitTime,jobInfo) :
     statusFile.write('time='+datetime.datetime.strftime(now,'%H:%M:%S')+'\n')
     statusFile.write('pid='+str(os.getpid())+'\n')
     # show what we're doing (a verb)
-    statusFile.write('status='+shortAction+'\n')
+    statusFile.write('status='+myHealth.reverse[health]+'\n')
     # show what we're doing it to (an object)
     if target is None : target=''
     statusFile.write('target='+target+'\n')
@@ -470,9 +474,11 @@ def reportStatusAndQueue(shortAction,longAction,target,waitTime,jobInfo) :
     # show disk usage info
     (total, used, free) = disk_usage(defaults['topDir'])
     statusFile.write('disk.mntpt='+defaults['topDir']+'\n')
-    statusFile.write('disk.total='+str(total)+'\n')
-    statusFile.write('disk.used='+str(used)+'\n')
-    statusFile.write('disk.free='+str(free)+'\n')
+    statusFile.write('disk.total.bytes='+str(total)+'\n')
+    statusFile.write('disk.used.bytes='+str(used)+'\n')
+    statusFile.write('disk.free.bytes='+str(free)+'\n')
+    statusFile.write('disk.used.percent='+("%.2f" % (100.0*float(used)/float(total)))+'\n')
+    statusFile.write('disk.free.percent='+("%.2f" % (100.0*float(free)/float(total)))+'\n')
     statusFile.close()
 
     # CREATE A FORMATTED TABLE
@@ -484,7 +490,7 @@ def reportStatusAndQueue(shortAction,longAction,target,waitTime,jobInfo) :
 
     queueFileName = libdir+'/queue'
     queueFile = file(queueFileName+suffix,'w')
-    queueFile.write(date+' : '+longAction+'\n')
+    queueFile.write(date+' : '+activity+'\n')
     queueFile.write('\n')
     for line in table :
         queueFile.write(line+'\n')
@@ -497,7 +503,7 @@ def reportStatusAndQueue(shortAction,longAction,target,waitTime,jobInfo) :
 
     # SHOW THE SORTED LIST IN THE LOG
 
-    log_info(date+' : '+longAction)
+    log_info(date+' : '+activity)
     for line in table :
         log_info(line)
     log_info('')
@@ -638,7 +644,7 @@ def do_single_pass() :
     #write_status('thinking',0,None)
     jobs = buildJobTable()
     jobs = updateAgesAndSort(jobs)
-    reportStatusAndQueue('thinking', 'thinking...', None, 0, jobs)
+    reportStatusAndQueue(myHealth.IDLE, 'thinking...', None, 0, jobs)
 
     # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
 
@@ -650,32 +656,32 @@ def do_single_pass() :
         index = job['index']
         # First try to ping the host before trying to back it up.
         if ( ping(job['host']) == False ) :
-            job['status'] = status.NOT_FOUND
-            reportStatusAndQueue('missing', "'"+index+"' was not found", index, 0, jobs)
+            job['status'] = jobStatus.NOT_FOUND
+            reportStatusAndQueue(myHealth.IDLE, "'"+index+"' was not found", index, 0, jobs)
             continue
         # Try to back up this job.
-        job['status'] = status.WORKING
-        reportStatusAndQueue('backup', "backing up '"+index+"'", index, 0, jobs)
+        job['status'] = jobStatus.BACKING_UP
+        reportStatusAndQueue(myHealth.BACKING_UP, "backing up '"+index+"'", index, 0, jobs)
         startTime = datetime.datetime.now()
         if job['tool'] == 'rsync' :
             if do_rsync_backup(job) :
-                job['status'] = status.ROTATING
-                reportStatusAndQueue('rotate', "rotating '"+index+"'", index, 0, jobs)
+                job['status'] = jobStatus.ROTATING
+                reportStatusAndQueue(myHealth.ROTATING, "rotating '"+index+"'", index, 0, jobs)
                 rotate(job)
-                job['status'] = status.SUCCEEDED
+                job['status'] = jobStatus.SUCCEEDED
             else : # not complete
-                job['status'] = status.FAILED
-                reportStatusAndQueue('discard', "discarding '"+index+"'", index, 0, jobs)
+                job['status'] = jobStatus.FAILED
+                reportStatusAndQueue(myHealth.CLEANING, "discarding '"+index+"'", index, 0, jobs)
                 discard(job)
         elif job['tool'] == 'cp' :
             if do_cp_backup(job) :
-                job['status'] = status.ROTATING
-                reportStatusAndQueue('rotate', "rotating '"+index+"'", index, 0, jobs)
+                job['status'] = jobStatus.ROTATING
+                reportStatusAndQueue(myHealth.ROTATING, "rotating '"+index+"'", index, 0, jobs)
                 rotate(job)
-                job['status'] = status.SUCCEEDED
+                job['status'] = jobStatus.SUCCEEDED
             else : # not complete
-                job['status'] = status.FAILED
-                reportStatusAndQueue('discard', "discarding '"+index+"'", index, 0, jobs)
+                job['status'] = jobStatus.FAILED
+                reportStatusAndQueue(myHealth.CLEANING, "discarding '"+index+"'", index, 0, jobs)
                 discard(job)
         endTime = datetime.datetime.now()
         job['lastBackupDurationSec'] = (endTime - startTime).seconds
@@ -686,7 +692,7 @@ def do_single_pass() :
     # sleep for a little bit
     for i in range(sleepMin,0,-1) :
         jobs = updateAgesAndSort(jobs)
-        reportStatusAndQueue('idle', 'sleeping '+str(i)+' min', None, i, jobs)
+        reportStatusAndQueue(myHealth.IDLE, 'sleeping '+str(i)+' min', None, i, jobs)
         time.sleep(60)
 
 #-----------------------------------------------------------

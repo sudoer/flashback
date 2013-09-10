@@ -27,8 +27,8 @@ if [[ $diff -gt $((3600 * 12)) ]] ; then
 fi
 # parse web status - fullness
 disk_mntpt=$(grep "^disk.mntpt=" $tmp | awk -F= '{print $2}')
-disk_total=$(grep "^disk.total=" $tmp | awk -F= '{print $2}')
-disk_used=$(grep "^disk.used=" $tmp | awk -F= '{print $2}')
+disk_total=$(grep "^disk.total.bytes=" $tmp | awk -F= '{print $2}')
+disk_used=$(grep "^disk.used.bytes=" $tmp | awk -F= '{print $2}')
 fullpct=$(( $disk_used * 100 / $disk_total ))
 if [[ $fullpct -gt 66 ]] ; then
    echo "backup filesystem ($disk_mntpt) on $host is filling up ($fullpct%)"

@@ -31,23 +31,23 @@ while true ; do
    stat=$(grep '^status=' $tmp | awk -F= '{print $2}')
    rm $tmp
    if [ $(cat /dev/null /proc/$pid/cmdline 2>/dev/null | grep -c 'flashback') -eq 0 ] ; then
-      stat='down'
+      stat='DOWN'
    fi
    case $stat in
-      'down')
+      'DOWN')
          # not working - three short blips (think "SOS")
          led_blink 3 0.1 0.3
          sleep 2
          ;;
-      'backup')
+      'BACKING_UP')
          # blink very quickly
          led_blink 2 0.2 0.4
          ;;
-      'rotate')
+      'ROTATING'|'CLEANING')
          # blink very quickly
          led_blink 2 0.1 0.2
          ;;
-      'idle')
+      'IDLE')
          # blink very slowly
          led_blink 5 2 1
          ;;
