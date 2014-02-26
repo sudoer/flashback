@@ -27,6 +27,8 @@ NOW
 [x] when ping fails, set status to NOTFOUND, not FAILED
 [ ] document - main config file options, overriding options in specific sub-config files
 [ ] document - how to install (if you're not on a debian system)
+consider ssh options >> StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+consider client keys using >> from="sheeva.home.alanporter.com",no-pty
 
 LATER
 ~~~~~
