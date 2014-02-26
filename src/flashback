@@ -530,6 +530,7 @@ def do_rsync_backup(job) :
     args = [
         '-al',
         '-E',
+        '-e', 'ssh -o PasswordAuthentication=no',
         '--delete',
         '--delete-excluded',
         '--numeric-ids',
