@@ -51,11 +51,7 @@ import errno
 #  H E L P E R   C L A S S E S
 #-----------------------------------------------------------
 
-# http://stackoverflow.com/questions/36932/how-can-i-represent-an-enum-in-python
-def enum(*sequential, **named) :
-    enums = dict(zip(sequential, range(len(sequential))), **named)
-    r_enums = dict((value, key) for key, value in enums.iteritems())
-    enums['reverse'] = r_enums
+def enum(**enums):
     return type('Enum', (), enums)
 
 #-----------------------------------------------------------
@@ -79,8 +75,24 @@ defaults['rsyncOpts'] = ''
 # plumbing (globals)
 options = ()
 g_logFD = None
-jobStatus = enum('UNKNOWN', 'NOT_READY', 'READY', 'NOT_FOUND', 'BACKING_UP', 'ROTATING', 'SUCCEEDED', 'FAILED', 'DISABLED')
-myHealth = enum('IDLE', 'BACKING_UP', 'ROTATING', 'CLEANING')
+
+jobStatus = enum(
+    UNKNOWN    = 'UNKNOWN',
+    NOT_READY  = 'NOT_READY',
+    READY      = 'READY',
+    NOT_FOUND  = 'NOT_FOUND',
+    BACKING_UP = 'BACKING_UP',
+    ROTATING   = 'ROTATING',
+    SUCCEEDED  = 'SUCCEEDED',
+    FAILED     = 'FAILED',
+    DISABLED   = 'DISABLED'
+)
+myHealth = enum(
+    IDLE       = 'IDLE',
+    BACKING_UP = 'BACKING_UP',
+    ROTATING   = 'ROTATING',
+    CLEANING   = 'CLEANING'
+)
 
 #-----------------------------------------------------------
 
@@ -191,7 +203,7 @@ def log_init() :
     #  logfile = logdir+"/garage.log"
     #  logfile = programName+'.log'
     logfile = '/dev/stdout'
-    g_logFD = open(logfile,'a')
+    g_logFD = open(logfile,'w')
 
 #-----------------------------------------------------------
 
@@ -458,14 +470,14 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo) :
     # CREATE A SMALL STATUS FILE
 
     statusFileName = libdir+'/status'
-    statusFile = file(statusFileName+suffix,'w')
+    statusFile = open(statusFileName+suffix,'w')
     now = datetime.datetime.now()
     # show time, date and PID - so we know that the info is current
     statusFile.write('date='+datetime.datetime.strftime(now,'%Y-%m-%d')+'\n')
     statusFile.write('time='+datetime.datetime.strftime(now,'%H:%M:%S')+'\n')
     statusFile.write('pid='+str(os.getpid())+'\n')
     # show what we're doing (a verb)
-    statusFile.write('status='+myHealth.reverse[health]+'\n')
+    statusFile.write('status='+health+'\n')
     # show what we're doing it to (an object)
     if target is None : target=''
     statusFile.write('target='+target+'\n')
@@ -489,7 +501,7 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo) :
     # DUMP THE SORTED LIST INTO THE QUEUE FILE
 
     queueFileName = libdir+'/queue'
-    queueFile = file(queueFileName+suffix,'w')
+    queueFile = open(queueFileName+suffix,'w')
     queueFile.write(date+' : '+activity+'\n')
     queueFile.write('\n')
     for line in table :
@@ -731,7 +743,9 @@ def main() :
                 sys.exit()
     except IOError as e :
         pass
-    file(pidfile,'w').write(str(os.getpid())+'\n')
+    f = open(pidfile,'w');
+    f.write(str(os.getpid())+'\n')
+    f.close()
 
     # READ GLOBAL OPTIONS
 
