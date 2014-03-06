@@ -89,12 +89,6 @@ jobStatus = enum(
     FAILED     = 'FAILED',
     DISABLED   = 'DISABLED'
 )
-myHealth = enum(
-    IDLE       = 'IDLE',
-    BACKING_UP = 'BACKING_UP',
-    ROTATING   = 'ROTATING',
-    CLEANING   = 'CLEANING'
-)
 
 #-----------------------------------------------------------
 
@@ -656,10 +650,20 @@ def discard(job) :
 
 def do_single_pass() :
 
+    # Server status is shown in status file, reflects what
+    # the SERVER is doing, not the state of each backup job.
+    serverIs = enum(
+        IDLE       = 'IDLE',
+        PREPARING  = 'PREPARING',
+        BACKING_UP = 'BACKING_UP',
+        ROTATING   = 'ROTATING',
+        CLEANING   = 'CLEANING'
+    )
+
     #write_status('thinking',0,None)
     jobs = buildJobTable()
     jobs = updateAgesAndSort(jobs)
-    reportStatusAndQueue(myHealth.IDLE, 'thinking...', None, 0, jobs)
+    reportStatusAndQueue(serverIs.PREPARING, 'thinking...', None, 0, jobs)
 
     # GO THROUGH THE LIST IN ORDER, BACKING UP EACH ONE IF NEEDED
 
@@ -672,31 +676,31 @@ def do_single_pass() :
         # First try to ping the host before trying to back it up.
         if ( ping(job['host']) == False ) :
             job['status'] = jobStatus.NOT_FOUND
-            reportStatusAndQueue(myHealth.IDLE, "'"+index+"' was not found", index, 0, jobs)
+            reportStatusAndQueue(serverIs.PREPARING, "'"+index+"' was not found", index, 0, jobs)
             continue
         # Try to back up this job.
         job['status'] = jobStatus.BACKING_UP
-        reportStatusAndQueue(myHealth.BACKING_UP, "backing up '"+index+"'", index, 0, jobs)
+        reportStatusAndQueue(serverIs.BACKING_UP, "backing up '"+index+"'", index, 0, jobs)
         startTime = datetime.datetime.now()
         if job['tool'] == 'rsync' :
             if do_rsync_backup(job) :
                 job['status'] = jobStatus.ROTATING
-                reportStatusAndQueue(myHealth.ROTATING, "rotating '"+index+"'", index, 0, jobs)
+                reportStatusAndQueue(serverIs.ROTATING, "rotating '"+index+"'", index, 0, jobs)
                 rotate(job)
                 job['status'] = jobStatus.SUCCEEDED
             else : # not complete
                 job['status'] = jobStatus.FAILED
-                reportStatusAndQueue(myHealth.CLEANING, "discarding '"+index+"'", index, 0, jobs)
+                reportStatusAndQueue(serverIs.CLEANING, "discarding '"+index+"'", index, 0, jobs)
                 discard(job)
         elif job['tool'] == 'cp' :
             if do_cp_backup(job) :
                 job['status'] = jobStatus.ROTATING
-                reportStatusAndQueue(myHealth.ROTATING, "rotating '"+index+"'", index, 0, jobs)
+                reportStatusAndQueue(serverIs.ROTATING, "rotating '"+index+"'", index, 0, jobs)
                 rotate(job)
                 job['status'] = jobStatus.SUCCEEDED
             else : # not complete
                 job['status'] = jobStatus.FAILED
-                reportStatusAndQueue(myHealth.CLEANING, "discarding '"+index+"'", index, 0, jobs)
+                reportStatusAndQueue(serverIs.CLEANING, "discarding '"+index+"'", index, 0, jobs)
                 discard(job)
         endTime = datetime.datetime.now()
         job['lastBackupDurationSec'] = (endTime - startTime).seconds
@@ -707,7 +711,7 @@ def do_single_pass() :
     # sleep for a little bit
     for i in range(sleepMin,0,-1) :
         jobs = updateAgesAndSort(jobs)
-        reportStatusAndQueue(myHealth.IDLE, 'sleeping '+str(i)+' min', None, i, jobs)
+        reportStatusAndQueue(serverIs.IDLE, 'sleeping '+str(i)+' min', None, i, jobs)
         time.sleep(60)
 
 #-----------------------------------------------------------
