@@ -36,24 +36,22 @@ while true ; do
    statusErrs=$(grep -c 'FAILED' $queueFile)
    statusSuccess=$(grep -c 'SUCCEEDED' $queueFile)
    rm $statusFile
+   rm $queueFile
    if [ $(cat /dev/null /proc/$pid/cmdline 2>/dev/null | grep -c 'flashback') -eq 0 ] ; then
       stat='DOWN'
    fi
    case $stat in
       'DOWN')
          # not working - three short red blips (think "SOS")
-         led_red ; sleep 2 ; led_off
+         led_red ; sleep 2 ; led_off ; sleep 1
          ;;
       'BACKING_UP')
-         # blink yellow twice quickly
-         led_yellow ; sleep 0.2 ; led_off ; sleep 0.4
-         led_yellow ; sleep 0.2 ; led_off ; sleep 0.4
+         # blink green and yellow
+         led_green ; sleep 1 ; led_yellow ; sleep 0.75
          ;;
       'ROTATING'|'CLEANING')
-         # blink yellow three times very quickly
-         led_yellow ; sleep 0.1 ; led_off ; sleep 0.2
-         led_yellow ; sleep 0.1 ; led_off ; sleep 0.2
-         led_yellow ; sleep 0.1 ; led_off ; sleep 0.2
+         # blink green and yellow
+         led_green ; sleep 1.5 ; led_yellow ; sleep 0.25
          ;;
       'IDLE')
          # blink yellow once if any backup succeeded
@@ -68,9 +66,9 @@ while true ; do
          for x in $(seq 1 $wt) ; do
             led_green ; sleep 0.3 ; led_off ; sleep 0.3
          done
+         sleep 1
          ;;
    esac
-   sleep 1
 done
 
 
