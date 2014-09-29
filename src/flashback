@@ -23,7 +23,7 @@ NOW
 [ ] bug?? : failures (half-copies) still update daily.1 timestamp
 [ ] debian package installs monitor.sh in examples
 [ ] test start/stop/install/uninstall
-[ ] rsyncOpts does not work
+[x] rsyncOpts does not work
 [x] when ping fails, set status to NOTFOUND, not FAILED
 [ ] document - main config file options, overriding options in specific sub-config files
 [ ] document - how to install (if you're not on a debian system)
@@ -535,7 +535,6 @@ def do_rsync_backup(job) :
 #       '--stats',
         '--link-dest='+defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1',
     ]
-    userArgs = job['rsyncOpts'].split(' ')
     src = job['src']
     dest = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
 
@@ -546,7 +545,11 @@ def do_rsync_backup(job) :
         log_debug('"excludes" file found, adding argument')
         args.append('--exclude-from='+excludes)
 
-    cmd = ['/usr/bin/rsync'] + args + [src, dest] # + userArgs
+    if len(job['rsyncOpts']) > 0 :
+        log_debug('"rsyncOpts" found, adding user arguments')
+        args.extend(job['rsyncOpts'].split(' '))
+
+    cmd = ['/usr/bin/rsync'] + args + [src, dest]
     log_info('running >> '+(','.join(cmd)))
     (rc,stdout,stderr) = shell_capture(cmd)
 
