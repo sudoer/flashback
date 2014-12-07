@@ -773,7 +773,7 @@ def main():
         setParmString(globalConfig,rawConfig,'label',defaults,'label')
         setParmString(globalConfig,rawConfig,'rsyncOpts',defaults,'rsyncOpts')
         setParmString(globalConfig,rawConfig,'tool',defaults,'tool')
-        setParmString(globalConfig,rawConfig,'preScript',defaults,'preScript')
+        setParmString(globalConfig,rawConfig,'helper',defaults,'helper')
         # NUMBER OPTIONS
         setParmInt(globalConfig,rawConfig,'cycleDay',defaults,'cycleSec',86400)
         setParmInt(globalConfig,rawConfig,'cycleHour',defaults,'cycleSec',3600)
@@ -800,15 +800,15 @@ def main():
 
     # RUN PRE-SCRIPT (may set time, mount disk, start monitor, etc)
 
-    reportStatusAndQueue('PRESCRIPT', 'not yet started', None, 0, None)
+    reportStatusAndQueue('PRESTART', 'not yet started', None, 0, None)
 
-    if os.path.isfile(defaults['preScript']):
-        cmd = [defaults['preScript']]
+    if os.path.isfile(defaults['helper']):
+        cmd = [defaults['helper']]
         log_info('running >> '+(','.join(cmd)))
         ## HANGS >> (rc,stdout,stderr) = shell_capture(cmd)
         rc = shell_do(cmd)
         if rc != 0:
-            log_debug("pre-script '"+defaults['preScript']+"' failed with rc "+str(rc))
+            log_debug("helper '"+defaults['helper']+"' failed with rc "+str(rc))
             sys.exit(1)
 
     # LOOP FOREVER, WORK AND SLEEP
