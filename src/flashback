@@ -493,7 +493,10 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo):
 
     # CREATE A FORMATTED TABLE
 
-    table = formattedTable(jobInfo)
+    if (jobInfo == None):
+        table = ['NOT YET STARTED']
+    else:
+        table = formattedTable(jobInfo)
     date = datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')
 
     # DUMP THE SORTED LIST INTO THE QUEUE FILE
@@ -796,6 +799,8 @@ def main():
     mkdir_p(libdir)
 
     # RUN PRE-SCRIPT (may set time, mount disk, start monitor, etc)
+
+    reportStatusAndQueue('PRESCRIPT', 'not yet started', None, 0, None)
 
     if os.path.isdir(defaults['preScript']):
         cmd = [defaults['preScript']
