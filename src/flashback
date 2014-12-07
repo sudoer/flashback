@@ -770,6 +770,7 @@ def main():
         setParmString(globalConfig,rawConfig,'label',defaults,'label')
         setParmString(globalConfig,rawConfig,'rsyncOpts',defaults,'rsyncOpts')
         setParmString(globalConfig,rawConfig,'tool',defaults,'tool')
+        setParmString(globalConfig,rawConfig,'preScript',defaults,'preScript')
         # NUMBER OPTIONS
         setParmInt(globalConfig,rawConfig,'cycleDay',defaults,'cycleSec',86400)
         setParmInt(globalConfig,rawConfig,'cycleHour',defaults,'cycleSec',3600)
@@ -793,6 +794,16 @@ def main():
     # SET UP SUPPORT/STATUS DIRECTORY
 
     mkdir_p(libdir)
+
+    # RUN PRE-SCRIPT (may set time, mount disk, start monitor, etc)
+
+    if os.path.isdir(defaults['preScript']):
+        cmd = [defaults['preScript']
+        log_info('running >> '+(','.join(cmd)))
+        (rc,stdout,stderr) = shell_capture(cmd)
+        if rc != 0:
+            log_debug("pre-script '"+defaults['preScript']+"' failed with rc "+str(rc))
+            sys.exit(1)
 
     # LOOP FOREVER, WORK AND SLEEP
 
