@@ -788,17 +788,7 @@ def main():
     else:
         log_debug("no config file '"+globalConfig+"', using defaults")
 
-    # SANITY CHECK
-
-    if os.path.isdir(defaults['topDir']) == False:
-        log_debug("top level backup directory '"+defaults['topDir']+"' not found")
-        sys.exit(1)
-
-    # SET UP SUPPORT/STATUS DIRECTORY
-
-    mkdir_p(libdir)
-
-    # RUN PRE-SCRIPT (may set time, mount disk, start monitor, etc)
+    # RUN HELPER SCRIPT (may set time, mount disk, start monitor, etc)
 
     reportStatusAndQueue('PRESTART', 'not yet started', None, 0, None)
 
@@ -810,6 +800,16 @@ def main():
         if rc != 0:
             log_debug("helper '"+defaults['helper']+"' failed with rc "+str(rc))
             sys.exit(1)
+
+    # SANITY CHECK
+
+    if os.path.isdir(defaults['topDir']) == False:
+        log_debug("top level backup directory '"+defaults['topDir']+"' not found")
+        sys.exit(1)
+
+    # SET UP SUPPORT/STATUS DIRECTORY
+
+    mkdir_p(libdir)
 
     # LOOP FOREVER, WORK AND SLEEP
 
