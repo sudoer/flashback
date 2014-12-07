@@ -805,7 +805,8 @@ def main():
     if os.path.isfile(defaults['preScript']):
         cmd = [defaults['preScript']]
         log_info('running >> '+(','.join(cmd)))
-        (rc,stdout,stderr) = shell_capture(cmd)
+        ## HANGS >> (rc,stdout,stderr) = shell_capture(cmd)
+        rc = shell_do(cmd)
         if rc != 0:
             log_debug("pre-script '"+defaults['preScript']+"' failed with rc "+str(rc))
             sys.exit(1)
