@@ -1,0 +1,22 @@
+
+I'm no systemd expert.  But this is how I set up
+flashback to start automatically on my PogoPlug4
+running Arch Linux.
+
+I included two copies of the "flashback.service"
+file in:
+/etc/systemd/system/flashback.service
+/etc/systemd/system/multi-user.target.wants/flashback.service
+
+The service file runs a bash script that lives in root's home
+directory.  It takes care of some startup details, like waiting
+for the time to be set over the network before allowing the
+flashback script to run.  It also kicks off a monitor script
+that blinks the LED, and a small script that keeps my external
+USB drive from going to sleep (a hack).
+
+I hope this is enough of a start to get flashback to run on
+your systemd-based system.  If you know what you're doing,
+please consider revising these instructions to be more clear
+and more reliable.
+

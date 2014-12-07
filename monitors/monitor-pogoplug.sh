@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This script was designed to run on a Pogo Plug 4.
+# It reads the status of the flashback backup program,
+# and it blinks the Pogo LED accordingly.
+
 status_file="/var/lib/flashback/status"
 queue_file="/var/lib/flashback/queue"
 

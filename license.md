@@ -1,7 +1,7 @@
 
 # flashback
 
-flashback, copyright (C) 2013 Alan Porter
+flashback, copyright (c) 2014 Alan Porter
 
 License: zlib
 

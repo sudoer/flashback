@@ -1,0 +1,13 @@
+
+[Unit]
+Description=flashback
+
+[Service]
+WorkingDirectory=/root
+Type=forking
+ExecStart=/bin/bash flashback-start.sh
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
+

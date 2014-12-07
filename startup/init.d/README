@@ -1,0 +1,8 @@
+
+This is the cookie-cutter startup script that
+can be used on init-based systems (like Debian,
+Ubuntu, and Red Hat).  You don't have to start
+it this way.  I like to just add a few lines to
+/etc/rc.local instead.  But this should give you
+a start if you want to use init.
+
