@@ -74,6 +74,7 @@ defaults['keepCount'] = 9
 defaults['label'] = 'daily'
 defaults['tool'] = 'rsync'
 defaults['rsyncOpts'] = ''
+defaults['probeSrc'] = 'no'
 # plumbing (globals)
 options = ()
 g_logFD = None
@@ -136,6 +137,7 @@ def jobfile_to_array(filename):
         setParmInt(filename,rawJob,'keepCount',sanitizedJob,'keepCount')
         # BOOLEAN OPTIONS
         setParmBool(filename,rawJob,'disabled',sanitizedJob,'disabled')
+        setParmBool(filename,rawJob,'probeSrc',sanitizedJob,'probeSrc')
 
         # IF THE JOB INFO IS COMPLETE, THEN SAVE IT
         if len(sanitizedJob) > 0:
@@ -679,13 +681,30 @@ def do_single_pass():
     for job in jobs:
         if job['ageSec'] < job['cycleSec'] : continue
         if job['disabled'] : continue
+
         # This is the name of our job, we'll use it a lot below.
         index = job['index']
+
         # First try to ping the host before trying to back it up.
         if ( ping(job['host']) == False ):
             job['status'] = jobStatus.NOT_FOUND
             reportStatusAndQueue(serverIs.PREPARING, "'"+index+"' was not found", index, 0, jobs)
             continue
+
+        # If we asked to probe the source directory first, look to see if the directory is there.
+        if job['probeSrc']:
+            # check to see if the source is a directory (for removable media)
+            (userAtHost,path) = job['src'].split(':')
+            cmd = ['/usr/bin/ssh', userAtHost, "bash -c 'if [[ -d "+path+" ]] ; then echo DIR ; fi'" ]
+            log_info('running >> '+(','.join(cmd)))
+            (rc,stdout,stderr) = shell_capture(cmd)
+            if stdout.strip() != 'DIR':
+                log_info('job '+index+': probe failed, removable media not mounted')
+                job['status'] = jobStatus.NOT_FOUND
+                reportStatusAndQueue(serverIs.PREPARING, "'"+index+"' was not found", index, 0, jobs)
+                continue
+            log_info('job '+index+': probe succeeded, removable media is mounted')
+
         # Try to back up this job.
         job['status'] = jobStatus.BACKING_UP
         reportStatusAndQueue(serverIs.BACKING_UP, "backing up '"+index+"'", index, 0, jobs)
