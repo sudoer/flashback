@@ -335,7 +335,7 @@ def buildJobTable():
         job['status'] = jobStatus.UNKNOWN
         job['lastBackupDurationSec'] = 0
         # set some defaults - only if not set in main jobs config file (TODO: change this ???)
-        for i in ['label','cycleSec','keepCount','tool','rsyncOpts']:
+        for i in ['label','cycleSec','keepCount','tool','rsyncOpts','removable']:
             if i not in job : job[i] = defaults[i]
         if 'disabled' not in job : job['disabled'] = False
 
