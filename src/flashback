@@ -74,7 +74,7 @@ defaults['keepCount'] = 9
 defaults['label'] = 'daily'
 defaults['tool'] = 'rsync'
 defaults['rsyncOpts'] = ''
-defaults['removable'] = 'no'
+defaults['removable'] = False
 # plumbing (globals)
 options = ()
 g_logFD = None
