@@ -5,7 +5,7 @@ Description=flashback
 [Service]
 WorkingDirectory=/root
 Type=forking
-ExecStart=/bin/bash flashback-start.sh
+ExecStart=/usr/sbin/flashback
 KillMode=process
 
 [Install]

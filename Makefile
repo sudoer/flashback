@@ -15,7 +15,14 @@ install:
 	done
 	# for non-debuild installations, install the init.d script, too
 	if [ -z "$(DESTDIR)" ] ; then \
-		install -D -o root -g root -m 0755 startup/init.d/flashback /etc/init.d/flashback ; \
+		case $(ps -p1 -o fname h) in \
+			"init") \
+				install -D -o root -g root -m 0755 startup/init.d/flashback /etc/init.d/flashback ; \
+				;; \
+			"systemd") \
+				echo "flashback must be manually installed on systemd-managed systems" \
+				;; \
+		esac \
 	fi
 
 uninstall:
