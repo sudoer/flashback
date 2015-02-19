@@ -1,0 +1,44 @@
+
+
+COMPLETE
+~~~~~~~~
+[x] snazzy name = flashback (was greenback, was sheevabackup)
+[x] config files (global, per machine, per share)
+[x] use rsync instead of rsback
+[x] rotate backups myself
+[x] plug-in to allow LED blinking
+[x] store status in a file
+[x] debian package
+[x] push to github
+[x] second-level backups
+[x] top-level config file - change from import to config format
+[x] top-level config file - move to /etc
+[x] config file - allow comments
+[x] config file - user-defined "topdir"
+[x] config file - default cycle times, labels
+[x] rsyncOpts does not work
+[x] when ping fails, set status to NOTFOUND, not FAILED
+
+
+TO DO
+~~~~~
+[ ] write summary info to a per-backup status/history file (sqlite?)
+[ ] bug?? : failures (half-copies) still update daily.1 timestamp
+[ ] debian package installs monitor.sh in examples
+[ ] test start/stop/install/uninstall
+[ ] document - main config file options, overriding options in specific sub-config files
+[ ] document - how to install (if you're not on a debian system)
+
+
+CONSIDER
+~~~~~~~~
+consider ssh options >> StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+consider client keys using >> from="sheeva.home.alanporter.com",no-pty
+
+
+LATER
+~~~~~
+deduplication - audit runs after backup, compares "new" and "large" files to yesterday's large files, compares md5, creates hard links
+
+
+

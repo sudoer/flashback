@@ -1,41 +1,5 @@
 #!/usr/bin/python -B
 
-"""
-TODO LIST
-
-NOW
-~~~
-[x] snazzy name = flashback (was greenback, was sheevabackup)
-[x] config files (global, per machine, per share)
-[x] use rsync instead of rsback
-[x] rotate backups myself
-[x] plug-in to allow LED blinking
-[x] store status in a file
-[x] debian package
-[x] push to github
-[x] second-level backups
-[x] top-level config file - change from import to config format
-[x] top-level config file - move to /etc
-[x] config file - allow comments
-[x] config file - user-defined "topdir"
-[x] config file - default cycle times, labels
-[ ] write summary info to a per-backup status/history file (sqlite?)
-[ ] bug?? : failures (half-copies) still update daily.1 timestamp
-[ ] debian package installs monitor.sh in examples
-[ ] test start/stop/install/uninstall
-[x] rsyncOpts does not work
-[x] when ping fails, set status to NOTFOUND, not FAILED
-[ ] document - main config file options, overriding options in specific sub-config files
-[ ] document - how to install (if you're not on a debian system)
-consider ssh options >> StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
-consider client keys using >> from="sheeva.home.alanporter.com",no-pty
-
-LATER
-~~~~~
-deduplication - audit runs after backup, compares "new" and "large" files to yesterday's
-   large files, compares md5, creates hard links
-"""
-
 import os
 import datetime
 import subprocess
@@ -65,16 +29,16 @@ programName = 'flashback'
 libdir = '/var/lib/'+programName
 maxAge = 10000000
 sleepMin = 10
-# defaults (global)
-defaults = {}
-defaults['topDir'] = '/flashback'
-defaults['lastBackupTimestamp'] = datetime.datetime(1970,1,1)
-defaults['cycleSec'] = 24*60*60
-defaults['keepCount'] = 9
-defaults['label'] = 'daily'
-defaults['tool'] = 'rsync'
-defaults['rsyncOpts'] = ''
-defaults['removable'] = False
+# globalCfg (global)
+globalCfg = {}
+globalCfg['topDir'] = '/flashback'
+globalCfg['lastBackupTimestamp'] = datetime.datetime(1970,1,1)
+globalCfg['cycleSec'] = 24*60*60
+globalCfg['keepCount'] = 9
+globalCfg['label'] = 'daily'
+globalCfg['tool'] = 'rsync'
+globalCfg['rsyncOpts'] = ''
+globalCfg['removable'] = False
 # plumbing (globals)
 options = ()
 g_logFD = None
@@ -325,7 +289,7 @@ def buildJobTable():
 
     jobInfo = jobfile_to_array('/etc/flashback.jobs')
 
-    # FILL IN THE 'jobInfo' DICTIONARY FROM DEFAULTS AND MORE CONFIGS
+    # FILL IN THE 'jobInfo' DICTIONARY FROM globalCfg AND JOB-SPECIFIC config FILES
 
     for job in jobInfo:
 
@@ -336,18 +300,18 @@ def buildJobTable():
         job['lastBackupDurationSec'] = 0
         # set some defaults - only if not set in main jobs config file (TODO: change this ???)
         for i in ['label','cycleSec','keepCount','tool','rsyncOpts','removable']:
-            if i not in job : job[i] = defaults[i]
+            if i not in job : job[i] = globalCfg[i]
         if 'disabled' not in job : job['disabled'] = False
 
         # set an index to refer to this entry by
         index = job['host']+'-'+job['volume']+'-'+job['label']
         job['index'] = index
 
-        # build a list of several optional config files to look for
+        # build a list of several machine-specific and job-specific config files to look for
         configFilenames=[]
-        configFilenames.append(defaults['topDir']+'/config') # /backup/config
-        configFilenames.append(defaults['topDir']+'/'+job['host']+'/config') # /backup/host/config
-        configFilenames.append(defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/config') # /backup/host/volume/config
+        configFilenames.append(globalCfg['topDir']+'/config') # /backup/config
+        configFilenames.append(globalCfg['topDir']+'/'+job['host']+'/config') # /backup/host/config
+        configFilenames.append(globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/config') # /backup/host/volume/config
 
         for configFilename in configFilenames:
             # read the config files if they exist
@@ -377,14 +341,14 @@ def buildJobTable():
                 log_debug("no config file '"+configFilename+"'")
 
         # Get the creation time of the daily.1 directory, if it exists.
-        recentBackup = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1'
+        recentBackup = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1'
         # Note: ctime() does not refer to creation time on *nix systems,
         # but rather the last time the inode data changed.
         if os.path.exists(recentBackup):
             mtime = os.path.getmtime(recentBackup)
             job['lastBackupTimestamp'] = datetime.datetime.fromtimestamp(mtime)
         else:
-            job['lastBackupTimestamp'] = defaults['lastBackupTimestamp']
+            job['lastBackupTimestamp'] = globalCfg['lastBackupTimestamp']
 
     return jobInfo
 
@@ -422,7 +386,6 @@ def formattedTable(jobs):
     for job in jobs:
         for fld in ('index','ageSec','cycleSec'):
             widths[fld] = max(widths[fld], len(str(job[fld])))
-    #widths['lastBackupTimestamp'] = len('| 2013-03-20 21:05:18 | 1368/1440  |  NEXT RUN 0d+0:01:12')
     widths['lastBackupTimestamp'] = len('2013-03-20 21:05:18')
 
     table = []
@@ -484,8 +447,8 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo):
     # show how long we'll do it (only if we're sleeping)
     statusFile.write('wait='+str(waitTime)+'\n')
     # show disk usage info
-    (total, used, free) = disk_usage(defaults['topDir'])
-    statusFile.write('disk.mntpt='+defaults['topDir']+'\n')
+    (total, used, free) = disk_usage(globalCfg['topDir'])
+    statusFile.write('disk.mntpt='+globalCfg['topDir']+'\n')
     statusFile.write('disk.total.bytes='+str(total)+'\n')
     statusFile.write('disk.used.bytes='+str(used)+'\n')
     statusFile.write('disk.free.bytes='+str(free)+'\n')
@@ -528,7 +491,7 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo):
 def do_rsync_backup(job):
 
     # if this is our first time, create a host/volume directory
-    mkdir_p(defaults['topDir']+'/'+job['host']+'/'+job['volume'])
+    mkdir_p(globalCfg['topDir']+'/'+job['host']+'/'+job['volume'])
 
     args = [
         '-al',
@@ -540,13 +503,13 @@ def do_rsync_backup(job):
         '--one-file-system',
 #       '-v',
 #       '--stats',
-        '--link-dest='+defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1',
+        '--link-dest='+globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1',
     ]
     src = job['src']
-    dest = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
+    dest = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
 
     # optional - "excludes" file
-    excludes = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/excludes'
+    excludes = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/excludes'
     log_debug('testing for ['+excludes+']')
     if os.path.isfile(excludes):
         log_debug('"excludes" file found, adding argument')
@@ -584,7 +547,7 @@ def do_rsync_backup(job):
     log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
 
     if complete:
-        prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+        prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
         if os.path.isdir(prefix+'0'):
             # "touch" the timestamp
             os.utime(prefix+'0',None)
@@ -602,11 +565,11 @@ def do_rsync_backup(job):
 def do_cp_backup(job):
 
     # if this is our first time, create a host/volume directory
-    mkdir_p(defaults['topDir']+'/'+job['host']+'/'+job['volume'])
+    mkdir_p(globalCfg['topDir']+'/'+job['host']+'/'+job['volume'])
 
     args = ['-alf']
     src = job['src']
-    dest = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
+    dest = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
 
     cmd = ['/bin/cp'] + args + [src, dest]
     log_info('running >> '+(','.join(cmd)))
@@ -617,7 +580,7 @@ def do_cp_backup(job):
     log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
 
     if complete:
-        prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+        prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
         if os.path.isdir(prefix+'0'):
             # "touch" the timestamp
             os.utime(prefix+'0',None)
@@ -634,7 +597,7 @@ def do_cp_backup(job):
 
 def rotate(job):
 
-    prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+    prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
 
     # rotate the numbered backups
     if os.path.isdir(prefix+str(job['keepCount'])):
@@ -651,7 +614,7 @@ def rotate(job):
 
 def discard(job):
 
-    prefix = defaults['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+    prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
     if os.path.isdir(prefix+'0'):
         log_debug('removing 0')
         shutil.rmtree(prefix+'0')
@@ -784,47 +747,56 @@ def main():
 
     # READ GLOBAL OPTIONS
 
-    globalConfig = '/etc/flashback.conf'
-    if os.path.isfile(globalConfig):
-        log_debug("reading global config file '"+globalConfig+"'")
-        rawConfig = cfgfile_to_dict(globalConfig)
+    globalConfigFile = '/etc/flashback.conf'
+    if os.path.isfile(globalConfigFile):
+        log_debug("reading global config file '"+globalConfigFile+"'")
+        rawConfig = cfgfile_to_dict(globalConfigFile)
         # STRING OPTIONS
-        setParmString(globalConfig,rawConfig,'topDir',defaults,'topDir')
-        setParmString(globalConfig,rawConfig,'label',defaults,'label')
-        setParmString(globalConfig,rawConfig,'rsyncOpts',defaults,'rsyncOpts')
-        setParmString(globalConfig,rawConfig,'tool',defaults,'tool')
-        setParmString(globalConfig,rawConfig,'helper',defaults,'helper')
+        setParmString(globalConfigFile,rawConfig,'topDir',globalCfg,'topDir')
+        setParmString(globalConfigFile,rawConfig,'label',globalCfg,'label')
+        setParmString(globalConfigFile,rawConfig,'rsyncOpts',globalCfg,'rsyncOpts')
+        setParmString(globalConfigFile,rawConfig,'tool',globalCfg,'tool')
+        setParmString(globalConfigFile,rawConfig,'helper',globalCfg,'helper')
         # NUMBER OPTIONS
-        setParmInt(globalConfig,rawConfig,'cycleDay',defaults,'cycleSec',86400)
-        setParmInt(globalConfig,rawConfig,'cycleHour',defaults,'cycleSec',3600)
-        setParmInt(globalConfig,rawConfig,'cycleMin',defaults,'cycleSec',60)
-        setParmInt(globalConfig,rawConfig,'cycleSec',defaults,'cycleSec')
-        setParmInt(globalConfig,rawConfig,'keepCount',defaults,'keepCount')
+        setParmInt(globalConfigFile,rawConfig,'cycleDay',globalCfg,'cycleSec',86400)
+        setParmInt(globalConfigFile,rawConfig,'cycleHour',globalCfg,'cycleSec',3600)
+        setParmInt(globalConfigFile,rawConfig,'cycleMin',globalCfg,'cycleSec',60)
+        setParmInt(globalConfigFile,rawConfig,'cycleSec',globalCfg,'cycleSec')
+        setParmInt(globalConfigFile,rawConfig,'keepCount',globalCfg,'keepCount')
 
         if len(rawConfig) > 0:
             for key in rawConfig.keys():
-                log_error("unknown parameter '"+key+"' in '"+globalConfig+"'")
+                log_error("unknown parameter '"+key+"' in '"+globalConfigFile+"'")
             sys.exit(1)
     else:
-        log_debug("no config file '"+globalConfig+"', using defaults")
+        log_debug("no config file '"+globalConfigFile+"', using hard-coded globalCfg")
 
-    # RUN HELPER SCRIPT (may set time, mount disk, start monitor, etc)
+    # At this point, 'globalCfg' contains all config settings that are either
+    # hard-coded at the top of this file, or overridden in /etc/flashback.conf.
+    # They are still called "defaults" because each job can override (some of)
+    # these values.
+    log_debug("globalCfg : "+str(globalCfg)+"")
 
+    # RUN HELPER SCRIPT, IF PRESENT
+
+    # The user can specify a helper script to run before flashback gets
+    # started.  This would be a good place to make sure we have a proper
+    # IP address, set NTP time, mount external hard disks, etc.  If the
+    # helper returns 0, then we're ready to start backing up stuff.
     reportStatusAndQueue('PRESTART', 'not yet started', None, 0, None)
-
-    if os.path.isfile(defaults['helper']):
-        cmd = [defaults['helper']]
+    if 'helper' in globalCfg and os.path.isfile(globalCfg['helper']):
+        cmd = [globalCfg['helper']]
         log_info('running >> '+(','.join(cmd)))
-        ## HANGS >> (rc,stdout,stderr) = shell_capture(cmd)
+        ## TODO: this hangs >> (rc,stdout,stderr) = shell_capture(cmd)
         rc = shell_do(cmd)
         if rc != 0:
-            log_debug("helper '"+defaults['helper']+"' failed with rc "+str(rc))
+            log_debug("helper '"+globalCfg['helper']+"' failed with rc "+str(rc))
             sys.exit(1)
 
     # SANITY CHECK
 
-    if os.path.isdir(defaults['topDir']) == False:
-        log_debug("top level backup directory '"+defaults['topDir']+"' not found")
+    if os.path.isdir(globalCfg['topDir']) == False:
+        log_debug("top level backup directory '"+globalCfg['topDir']+"' not found")
         sys.exit(1)
 
     # SET UP SUPPORT/STATUS DIRECTORY
