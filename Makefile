@@ -10,12 +10,12 @@ clean:
 install:
 	# if using debuild, then $(DESTDIR) makefile variable will be set
 	install -D -o root -g root -m 0755 src/flashback $(DESTDIR)/usr/sbin/flashback
-	for f in $$(cd examples ; ls -1) ; do \
+	for f in $(shell cd examples ; ls -1) ; do \
 		install -D -o root -g root -m 0644 examples/$$f $(DESTDIR)/usr/share/doc/flashback/examples/$$f ; \
 	done
 	# for non-debuild installations, install the init.d script, too
 	if [ -z "$(DESTDIR)" ] ; then \
-		case $(ps -p1 -o fname h) in \
+		case $(shell ps -p1 -o fname h) in \
 			"init") \
 				install -D -o root -g root -m 0755 startup/init.d/flashback /etc/init.d/flashback ; \
 				;; \

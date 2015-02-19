@@ -3,7 +3,7 @@ To install flashback...
 
 # Make sure you have the prerequisites.
 
-    apt-get install python rsync make
+    apt-get install python rsync make debhelper devscripts
 
 # Get the source from github.
 
