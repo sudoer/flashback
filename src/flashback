@@ -195,9 +195,20 @@ def log_error(string):
 
 #-----------------------------------------------------------
 
+def format_arglist_into_shellcmd(originalArgs):
+    copyOfArgs = list(originalArgs)
+    for idx, arg in enumerate(copyOfArgs):
+        if arg.find(' ') != -1:
+            modifiedArg = '"'+arg.replace('"','\\"')+'"'
+            copyOfArgs[idx] = modifiedArg
+    return (' '.join(copyOfArgs))
+
+#-----------------------------------------------------------
+
 def shell_capture(cmdargs):
     global g_logFD
-    log_debug('shell_capture command >> '+(' '.join(cmdargs)))
+    log_debug('shell_capture arguments >> '+(",".join(cmdargs)))
+    log_debug('shell_capture command >> '+format_arglist_into_shellcmd(cmdargs))
     p = subprocess.Popen(cmdargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = p.communicate()
     rc = p.returncode
@@ -208,9 +219,9 @@ def shell_capture(cmdargs):
 
 def shell_do(cmdargs):
     global g_logFD
-    log_debug('shell_do command >> '+(' '.join(cmdargs)))
+    log_debug('shell_do arguments >> '+(",".join(cmdargs)))
+    log_debug('shell_do command >> '+format_arglist_into_shellcmd(cmdargs))
     rc = subprocess.call(cmdargs)
-    #rc = subprocess.call(cmdargs, stdout=g_logFD, stderr=g_logFD)
     log_debug("shell_do rc = "+("%d"%rc))
     return rc
 
@@ -501,8 +512,6 @@ def do_rsync_backup(job):
         '--delete-excluded',
         '--numeric-ids',
         '--one-file-system',
-#       '-v',
-#       '--stats',
         '--link-dest='+globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1',
     ]
     src = job['src']
@@ -520,7 +529,6 @@ def do_rsync_backup(job):
         args.extend(job['rsyncOpts'].split(' '))
 
     cmd = ['/usr/bin/rsync'] + args + [src, dest]
-    log_info('running >> '+(','.join(cmd)))
     (rc,stdout,stderr) = shell_capture(cmd)
 
     #   0      Success
@@ -572,7 +580,6 @@ def do_cp_backup(job):
     dest = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
 
     cmd = ['/bin/cp'] + args + [src, dest]
-    log_info('running >> '+(','.join(cmd)))
     (rc,stdout,stderr) = shell_capture(cmd)
     #   0      Success
     #   1      Failure
@@ -660,7 +667,6 @@ def do_single_pass():
             (userAtHost,path) = job['src'].split(':')
             path = path.rstrip('/')
             cmd = ['/usr/bin/ssh', userAtHost, "bash -c 'if [[ -d "+path+" ]] ; then echo DIR ; fi'" ]
-            log_info('running >> '+(','.join(cmd)))
             (rc,stdout,stderr) = shell_capture(cmd)
             if stdout.strip() != 'DIR':
                 log_info('job '+index+': probe failed, removable media not mounted')
@@ -786,7 +792,6 @@ def main():
     reportStatusAndQueue('PRESTART', 'not yet started', None, 0, None)
     if 'helper' in globalCfg and os.path.isfile(globalCfg['helper']):
         cmd = [globalCfg['helper']]
-        log_info('running >> '+(','.join(cmd)))
         ## TODO: this hangs >> (rc,stdout,stderr) = shell_capture(cmd)
         rc = shell_do(cmd)
         if rc != 0:
