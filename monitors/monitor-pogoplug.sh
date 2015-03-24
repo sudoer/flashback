@@ -49,6 +49,10 @@ while true ; do
          # long red = we're dead
          led_red ; sleep 2 ; led_off ; sleep 1
          ;;
+      'PRESTART')
+         # long yellow = not started yet
+         led_yellow ; sleep 2 ; led_off ; sleep 1
+         ;;
       'BACKING_UP')
          # alternate yellow and green (more yellow than green)
          led_yellow ; sleep 1.25 ; led_green ; sleep 0.5
