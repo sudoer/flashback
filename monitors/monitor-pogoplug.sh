@@ -46,27 +46,27 @@ while true ; do
    fi
    case $stat in
       'DOWN')
-         # not working - three short red blips (think "SOS")
+         # long red = we're dead
          led_red ; sleep 2 ; led_off ; sleep 1
          ;;
       'BACKING_UP')
-         # blink green and yellow
-         led_green ; sleep 1 ; led_yellow ; sleep 0.75
+         # alternate yellow and green (more yellow than green)
+         led_yellow ; sleep 1.25 ; led_green ; sleep 0.5
          ;;
       'ROTATING'|'CLEANING')
-         # blink green and yellow
-         led_green ; sleep 1.5 ; led_yellow ; sleep 0.25
+         # alternate green and yellow (more green than yellow)
+         led_green ; sleep 1.25 ; led_yellow ; sleep 0.5
          ;;
       'IDLE')
-         # blink yellow once if any backup succeeded
+         # one short yellow if any backup succeeded
          if [[ $statusSuccess -gt 0 ]] ; then
             led_yellow ; sleep 0.3 ; led_off ; sleep 0.6
          fi
-         # blink red once if any backup failed
+         # one short red if any backup failed
          if [[ $statusErrs -gt 0 ]] ; then
             led_red ; sleep 0.3 ; led_off ; sleep 0.6
          fi
-         # blink green once for each "wait" minute
+         # one short green for each minute of "waiting"
          for x in $(seq 1 $wt) ; do
             led_green ; sleep 0.3 ; led_off ; sleep 0.3
          done
