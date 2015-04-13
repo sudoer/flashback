@@ -12,6 +12,7 @@ import time
 import shutil
 import imp
 import errno
+import signal
 
 #-----------------------------------------------------------
 #  H E L P E R   C L A S S E S
@@ -823,7 +824,15 @@ def main():
 
 #-----------------------------------------------------------
 
+def sigterm_handler(signal, frame):
+    log_debug('received TERM signal')
+    reportStatusAndQueue('DOWN', 'stopped', None, 0, None)
+    sys.exit(0)
+
+#-----------------------------------------------------------
+
 if __name__ == "__main__":
-     main()
+    signal.signal(signal.SIGTERM, sigterm_handler)
+    main()
 
 
