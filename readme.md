@@ -39,22 +39,25 @@ orders from a few config files, and it writes its status to two output files.
 There is no database, no user interface, no web server, nothing.  Just those
 text files.
 
-I share those status files via a web server, so I can check on the status by
-popping open a browser (even on my phone) and just looking at the current
-(plain ASCII) status.  And that has been adequate.  I also have a script on
-another machine that read those status files (using wget), and displays the
-status on an LED sign in my office.  I have another script that read that
-status file (again, using wget) and it sends me an email if anything looks
-out-of-place.  But these are not really part of flashback... they just use that
-super-simple plain text file interface.
+So note: flashback does not have a fancy user interface for setting up jobs,
+checking on statuses, or recovering files.  You set up jobs by editing a few
+config files.  You check on the status by looking at two status files (via
+logging in and using 'cat', or by browser if you share those files using a web
+server).  You restore files using rsync.
 
-So plain text files can work.  However, flashback does not have a fancy user
-interface for setting up jobs, checking on statuses, or recovering files.  You
-set up jobs by editing two config files.  You check on the status by looking at
-two status files (via logging in and using 'cat', or by browser if you share
-those files using a web server).  You restore files using rsync.  If you are
-not comfortable with the shell and command line programs, then flashback is
-probably not for you.
+If you are not comfortable with the shell and command line programs, then
+flashback is probably not for you.
+
+If you're comfortable with plain text files...
+
+I share those status files via a web server running on the Pogo Plug, so I can
+check on the status by popping open a browser (even on my phone) and just
+looking at the current status, in all of its plain ASCII glory.
+
+I also have a script on another machine that reads those status files (using
+wget), and displays the status on a scrolling LED sign in my office.  I have
+another script that read that status file (again, using wget) and it sends me
+an email if anything looks out-of-place (this one is included in the git repo).
 
 # Testimonials
 
@@ -72,7 +75,7 @@ and starts backing up anything that has changed recently.
 
 # Limitations
 
-Flashback does not do "off-site" backups.  This is a much bigger problem than
+Flashback does not do "off-site" backups.  That is a much bigger problem than
 on-site backups, because you have to really think about how much bandwidth
 you'll be using... especially if you're pushing backups out of your house
 (where you typically have a very small upload pipe).
@@ -101,7 +104,7 @@ rsback for these temporary jobs when I could just call rsync myself.  I do owe
 a lot to the rsback project, since it introduced me to rsync's link-dest
 capability.
 
-## A message from the author
+# A message from the author
 
 This has been a very fun project, and it is useful as well.  I hope you enjoy
 it.  If you have questions or comments, please contact me.
