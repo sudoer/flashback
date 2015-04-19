@@ -824,7 +824,7 @@ def main():
 
 #-----------------------------------------------------------
 
-def sigterm_handler(signal, frame):
+def signal_handler(signal, frame):
     log_debug('received TERM signal')
     reportStatusAndQueue('DOWN', 'stopped', None, 0, None)
     sys.exit(0)
@@ -832,7 +832,7 @@ def sigterm_handler(signal, frame):
 #-----------------------------------------------------------
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGTERM, sigterm_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     main()
 
 
