@@ -91,6 +91,7 @@ def jobfile_to_array(filename):
         req1 = setParmString(filename,rawJob,'host',sanitizedJob,'host')
         req2 = setParmString(filename,rawJob,'volume',sanitizedJob,'volume')
         req3 = setParmString(filename,rawJob,'src',sanitizedJob,'src')
+        setParmString(filename,rawJob,'fqdn',sanitizedJob,'fqdn')
         setParmString(filename,rawJob,'label',sanitizedJob,'label')
         setParmString(filename,rawJob,'rsyncOpts',sanitizedJob,'rsyncOpts')
         setParmString(filename,rawJob,'tool',sanitizedJob,'tool')
@@ -104,8 +105,11 @@ def jobfile_to_array(filename):
         setParmBool(filename,rawJob,'disabled',sanitizedJob,'disabled')
         setParmBool(filename,rawJob,'removable',sanitizedJob,'removable')
 
-        # in the file, it's called "host", separate into "fqdn" and short "host"
-        sanitizedJob['fqdn'] = sanitizedJob['host']
+        # Specifying an FQDN is optional in the config file.
+        # If none was specified, then set it to the host.
+        if 'fqdn' not in sanitizedJob:
+            sanitizedJob['fqdn'] = sanitizedJob['host']
+        # If host is in FQDN format (with dots), trim them out.
         if sanitizedJob['host'].find('.') >= 0:
             sanitizedJob['host'] = sanitizedJob['host'].split('.')[0]
 
