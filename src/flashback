@@ -242,6 +242,15 @@ def sec2dhms(s):
 
 #-----------------------------------------------------------
 
+def sec2string(s):
+    (d,h,m,s) = sec2dhms(s)
+    if d > 0:
+        return '%dd+%d:%02d:%02d' % (d,h,m,s)
+    else:
+        return '%d:%02d:%02d' % (h,m,s)
+
+#-----------------------------------------------------------
+
 def ping(host):
     return True if ( shell_do(['ping','-c1',host]) == 0 ) else False
 
@@ -415,13 +424,8 @@ def formattedTable(jobs):
 
     now = datetime.datetime.now()
     for job in jobs:
-        (d,h,m,s) = sec2dhms( job['nextBackupSec'] )
-        nextBackupInterval = '%dd+%d:%02d:%02d' % (d,h,m,s)
-        (d,h,m,s) = sec2dhms( job['lastBackupDurationSec'] )
-        if d > 0:
-            lastBackupDurationStr = '%dd+%d:%02d:%02d' % (d,h,m,s)
-        else:
-            lastBackupDurationStr = '%d:%02d:%02d' % (h,m,s)
+        nextBackupInterval = sec2string( job['nextBackupSec'] )
+        lastBackupDurationStr = sec2string( job['lastBackupDurationSec'] )
         switch = {
             jobStatus.UNKNOWN :    '???',
             jobStatus.DISABLED :   'DISABLED',
