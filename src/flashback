@@ -104,6 +104,11 @@ def jobfile_to_array(filename):
         setParmBool(filename,rawJob,'disabled',sanitizedJob,'disabled')
         setParmBool(filename,rawJob,'removable',sanitizedJob,'removable')
 
+        # in the file, it's called "host", separate into "fqdn" and short "host"
+        sanitizedJob['fqdn'] = sanitizedJob['host']
+        if sanitizedJob['host'].find('.') >= 0:
+            sanitizedJob['host'] = sanitizedJob['host'].split('.')[0]
+
         # IF THE JOB INFO IS COMPLETE, THEN SAVE IT
         if len(sanitizedJob) > 0:
             if req1 and req2 and req3:
@@ -659,8 +664,8 @@ def do_single_pass():
         # This is the name of our job, we'll use it a lot below.
         index = job['index']
 
-        # First try to ping the host before trying to back it up.
-        if ( ping(job['host']) == False ):
+        # First try to ping the host (full domain name) before trying to back it up.
+        if ( ping(job['fqdn']) == False ):
             job['status'] = jobStatus.NOT_FOUND
             reportStatusAndQueue(serverIs.PREPARING, "'"+index+"' was not found", index, 0, jobs)
             continue
