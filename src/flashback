@@ -33,6 +33,7 @@ sleepMin = 10
 # globalCfg (global)
 globalCfg = {}
 globalCfg['topDir'] = '/flashback'
+globalCfg['logFile'] = '/dev/stdout'
 globalCfg['lastBackupTimestamp'] = datetime.datetime(1970,1,1)
 globalCfg['cycleSec'] = 24*60*60
 globalCfg['keepCount'] = 9
@@ -169,13 +170,10 @@ def log_init():
     # we're writing these globals
     global g_logFD
     # log file
-    #  logdir = os.environ['HOME']+"/var/log"
-    #  if not os.path.exists(logdir):
-    #     os.makedirs(logdir)
-    #  logfile = logdir+"/garage.log"
-    #  logfile = programName+'.log'
-    logfile = '/dev/stdout'
-    g_logFD = open(logfile,'w')
+    if g_logFD:
+        g_logFD.close()
+    logfile = globalCfg['logFile']
+    g_logFD = open(logfile,'a')
 
 #-----------------------------------------------------------
 
@@ -579,6 +577,11 @@ def do_rsync_backup(job):
         else:
             log_debug(prefix+'0 directory was not found, marking incomplete')
             complete = False
+    else:
+        log_debug('stdout:')
+        log_debug(stdout)
+        log_debug('stderr:')
+        log_debug(stderr)
 
     log_debug('backup of '+job['host']+'/'+job['volume']+' is %s' %
         ('complete' if complete else 'incomplete') )
@@ -776,6 +779,7 @@ def main():
         rawConfig = cfgfile_to_dict(globalConfigFile)
         # STRING OPTIONS
         setParmString(globalConfigFile,rawConfig,'topDir',globalCfg,'topDir')
+        setParmString(globalConfigFile,rawConfig,'logFile',globalCfg,'logFile')
         setParmString(globalConfigFile,rawConfig,'label',globalCfg,'label')
         setParmString(globalConfigFile,rawConfig,'rsyncOpts',globalCfg,'rsyncOpts')
         setParmString(globalConfigFile,rawConfig,'tool',globalCfg,'tool')
@@ -798,6 +802,8 @@ def main():
     # hard-coded at the top of this file, or overridden in /etc/flashback.conf.
     # They are still called "defaults" because each job can override (some of)
     # these values.
+    log_init()
+    log_info('START')
     log_debug("globalCfg : "+str(globalCfg)+"")
 
     # RUN HELPER SCRIPT, IF PRESENT
