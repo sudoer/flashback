@@ -166,14 +166,16 @@ def cfgfile_to_dict(filename):
 
 #-----------------------------------------------------------
 
-def log_init():
+def log_init(logfile=None):
     # we're writing these globals
     global g_logFD
     # log file
     if g_logFD:
         g_logFD.close()
-    logfile = globalCfg['logFile']
-    g_logFD = open(logfile,'a')
+    if logfile is not None:
+        g_logFD = open(logfile,'a')
+    else:
+        g_logFD = open('/dev/stderr','a')
 
 #-----------------------------------------------------------
 
@@ -473,13 +475,17 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo):
     # show how long we'll do it (only if we're sleeping)
     statusFile.write('wait='+str(waitTime)+'\n')
     # show disk usage info
-    (total, used, free) = disk_usage(globalCfg['topDir'])
     statusFile.write('disk.mntpt='+globalCfg['topDir']+'\n')
-    statusFile.write('disk.total.bytes='+str(total)+'\n')
-    statusFile.write('disk.used.bytes='+str(used)+'\n')
-    statusFile.write('disk.free.bytes='+str(free)+'\n')
-    statusFile.write('disk.used.percent='+("%.2f" % (100.0*float(used)/float(total)))+'\n')
-    statusFile.write('disk.free.percent='+("%.2f" % (100.0*float(free)/float(total)))+'\n')
+    try:
+        (total, used, free) = disk_usage(globalCfg['topDir'])
+        statusFile.write('disk.mounted=true\n')
+        statusFile.write('disk.total.bytes='+str(total)+'\n')
+        statusFile.write('disk.used.bytes='+str(used)+'\n')
+        statusFile.write('disk.free.bytes='+str(free)+'\n')
+        statusFile.write('disk.used.percent='+("%.2f" % (100.0*float(used)/float(total)))+'\n')
+        statusFile.write('disk.free.percent='+("%.2f" % (100.0*float(free)/float(total)))+'\n')
+    except OSError:
+        statusFile.write('disk.mounted=false\n')
     statusFile.close()
 
     # CREATE A FORMATTED TABLE
@@ -748,7 +754,7 @@ def main():
 
     # SET UP SERVICES
 
-    log_init()
+    log_init(logfile='/var/log/flashback-init.log')
 
     # LOOK FOR PID FILE, EXIT IF FOUND
 
@@ -802,9 +808,6 @@ def main():
     # hard-coded at the top of this file, or overridden in /etc/flashback.conf.
     # They are still called "defaults" because each job can override (some of)
     # these values.
-    log_init()
-    log_info('START')
-    log_debug("globalCfg : "+str(globalCfg)+"")
 
     # RUN HELPER SCRIPT, IF PRESENT
 
@@ -818,8 +821,15 @@ def main():
         ## TODO: this hangs >> (rc,stdout,stderr) = shell_capture(cmd)
         rc = shell_do(cmd)
         if rc != 0:
-            log_debug("helper '"+globalCfg['helper']+"' failed with rc "+str(rc))
+            log_info("helper '"+globalCfg['helper']+"' failed with rc "+str(rc))
             sys.exit(1)
+
+    # At this point, the large disk has been mounted.
+
+    log_info('flashback initialized, further logs will be in '+globalCfg['logFile'])
+    log_init(logfile=globalCfg['logFile'])
+    log_info('START')
+    log_debug("globalCfg : "+str(globalCfg)+"")
 
     # SANITY CHECK
 
