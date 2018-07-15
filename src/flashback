@@ -33,6 +33,7 @@ sleepMin = 10
 # globalCfg (global)
 globalCfg = {}
 globalCfg['topDir'] = '/flashback'
+globalCfg['logFile'] = '/dev/stdout'
 globalCfg['lastBackupTimestamp'] = datetime.datetime(1970,1,1)
 globalCfg['cycleSec'] = 24*60*60
 globalCfg['keepCount'] = 9
@@ -165,17 +166,16 @@ def cfgfile_to_dict(filename):
 
 #-----------------------------------------------------------
 
-def log_init():
+def log_init(logfile=None):
     # we're writing these globals
     global g_logFD
     # log file
-    #  logdir = os.environ['HOME']+"/var/log"
-    #  if not os.path.exists(logdir):
-    #     os.makedirs(logdir)
-    #  logfile = logdir+"/garage.log"
-    #  logfile = programName+'.log'
-    logfile = '/dev/stdout'
-    g_logFD = open(logfile,'w')
+    if g_logFD:
+        g_logFD.close()
+    if logfile is not None:
+        g_logFD = open(logfile,'a')
+    else:
+        g_logFD = open('/dev/stderr','a')
 
 #-----------------------------------------------------------
 
@@ -188,7 +188,6 @@ def log_debug(string):
 def log_info(string):
     if options.quiet:
         return
-    global g_logFD
     timeStamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     g_logFD.write(timeStamp+" "+string+"\n")
     g_logFD.flush()
@@ -197,7 +196,6 @@ def log_info(string):
 #-----------------------------------------------------------
 
 def log_error(string):
-    global g_logFD
     timeStamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     g_logFD.write(timeStamp+" ERROR "+string+"\n")
     g_logFD.flush()
@@ -216,7 +214,6 @@ def format_arglist_into_shellcmd(originalArgs):
 #-----------------------------------------------------------
 
 def shell_capture(cmdargs):
-    global g_logFD
     log_debug('shell_capture arguments >> '+(",".join(cmdargs)))
     log_debug('shell_capture command >> '+format_arglist_into_shellcmd(cmdargs))
     p = subprocess.Popen(cmdargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -228,7 +225,6 @@ def shell_capture(cmdargs):
 #-----------------------------------------------------------
 
 def shell_do(cmdargs):
-    global g_logFD
     log_debug('shell_do arguments >> '+(",".join(cmdargs)))
     log_debug('shell_do command >> '+format_arglist_into_shellcmd(cmdargs))
     rc = subprocess.call(cmdargs)
@@ -745,7 +741,7 @@ def main():
 
     # SET UP SERVICES
 
-    log_init()
+    log_init(logfile='/var/log/flashback-init.log')
 
     # LOOK FOR PID FILE, EXIT IF FOUND
 
@@ -776,6 +772,7 @@ def main():
         rawConfig = cfgfile_to_dict(globalConfigFile)
         # STRING OPTIONS
         setParmString(globalConfigFile,rawConfig,'topDir',globalCfg,'topDir')
+        setParmString(globalConfigFile,rawConfig,'logFile',globalCfg,'logFile')
         setParmString(globalConfigFile,rawConfig,'label',globalCfg,'label')
         setParmString(globalConfigFile,rawConfig,'rsyncOpts',globalCfg,'rsyncOpts')
         setParmString(globalConfigFile,rawConfig,'tool',globalCfg,'tool')
@@ -798,7 +795,6 @@ def main():
     # hard-coded at the top of this file, or overridden in /etc/flashback.conf.
     # They are still called "defaults" because each job can override (some of)
     # these values.
-    log_debug("globalCfg : "+str(globalCfg)+"")
 
     # RUN HELPER SCRIPT, IF PRESENT
 
@@ -812,8 +808,15 @@ def main():
         ## TODO: this hangs >> (rc,stdout,stderr) = shell_capture(cmd)
         rc = shell_do(cmd)
         if rc != 0:
-            log_debug("helper '"+globalCfg['helper']+"' failed with rc "+str(rc))
+            log_info("helper '"+globalCfg['helper']+"' failed with rc "+str(rc))
             sys.exit(1)
+
+    # At this point, the large disk has been mounted.
+
+    log_info('flashback initialized, further logs will be in '+globalCfg['logFile'])
+    log_init(logfile=globalCfg['logFile'])
+    log_info('START')
+    log_debug("globalCfg : "+str(globalCfg)+"")
 
     # SANITY CHECK
 
