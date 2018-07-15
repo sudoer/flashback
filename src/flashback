@@ -471,13 +471,17 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo):
     # show how long we'll do it (only if we're sleeping)
     statusFile.write('wait='+str(waitTime)+'\n')
     # show disk usage info
-    (total, used, free) = disk_usage(globalCfg['topDir'])
     statusFile.write('disk.mntpt='+globalCfg['topDir']+'\n')
-    statusFile.write('disk.total.bytes='+str(total)+'\n')
-    statusFile.write('disk.used.bytes='+str(used)+'\n')
-    statusFile.write('disk.free.bytes='+str(free)+'\n')
-    statusFile.write('disk.used.percent='+("%.2f" % (100.0*float(used)/float(total)))+'\n')
-    statusFile.write('disk.free.percent='+("%.2f" % (100.0*float(free)/float(total)))+'\n')
+    try:
+        (total, used, free) = disk_usage(globalCfg['topDir'])
+        statusFile.write('disk.mounted=true\n')
+        statusFile.write('disk.total.bytes='+str(total)+'\n')
+        statusFile.write('disk.used.bytes='+str(used)+'\n')
+        statusFile.write('disk.free.bytes='+str(free)+'\n')
+        statusFile.write('disk.used.percent='+("%.2f" % (100.0*float(used)/float(total)))+'\n')
+        statusFile.write('disk.free.percent='+("%.2f" % (100.0*float(free)/float(total)))+'\n')
+    except OSError:
+        statusFile.write('disk.mounted=false\n')
     statusFile.close()
 
     # CREATE A FORMATTED TABLE
