@@ -1,0 +1,12 @@
+date=2016-08-03
+time=12:01:32
+pid=1855
+status=IDLE
+target=
+wait=9
+disk.mntpt=/backup
+disk.total.bytes=2164384514048
+disk.used.bytes=1518491488256
+disk.free.bytes=645876248576
+disk.used.percent=70.16
+disk.free.percent=29.84
