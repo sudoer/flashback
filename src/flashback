@@ -218,7 +218,7 @@ def shell_capture_2(cmdargs, poll_time, poll_func, poll_args, poll_kwargs, stdou
     log_debug('shell_capture_2 command >> '+format_arglist_into_shellcmd(cmdargs))
     p = subprocess.Popen(cmdargs, stdout=stdout, stderr=stderr)
     # wait for process to finish
-    while not p.poll():
+    while p.poll() is None:
         time.sleep(poll_time)
         poll_func(*poll_args, **poll_kwargs)
     rc = p.returncode
@@ -531,7 +531,7 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo):
 
 #-----------------------------------------------------------
 
-def do_rsync_backup(job):
+def do_rsync_backup(job, index, jobs):
 
     # if this is our first time, create a host/volume directory
     host_vol_dir = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']
@@ -569,9 +569,10 @@ def do_rsync_backup(job):
     stderr_obj = open(stderr_filename, 'w')
 
     def poll_func(*args, **kwargs):
-        log_debug('args = %s, kwargs = %s' % (args, kwargs))
+        # log_debug('args = %s, kwargs = %s' % (args, kwargs))
+        reportStatusAndQueue(serverIs.BACKING_UP, "backing up '"+index+"'", index, 0, jobs)
 
-    rc = shell_capture_2(cmd, 30, poll_func, [], {}, stdout=stdout_obj, stderr=stderr_obj)
+    rc = shell_capture_2(cmd, 60, poll_func, [], {}, stdout=stdout_obj, stderr=stderr_obj)
     stdout_obj.close()
     stderr_obj.close()
 
@@ -726,7 +727,7 @@ def do_single_pass():
         reportStatusAndQueue(serverIs.BACKING_UP, "backing up '"+index+"'", index, 0, jobs)
         startTime = datetime.datetime.now()
         if job['tool'] == 'rsync':
-            if do_rsync_backup(job):
+            if do_rsync_backup(job, index, jobs):
                 job['status'] = jobStatus.ROTATING
                 reportStatusAndQueue(serverIs.ROTATING, "rotating '"+index+"'", index, 0, jobs)
                 rotate(job)
