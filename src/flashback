@@ -296,6 +296,16 @@ def disk_usage(path):
 
 #-----------------------------------------------------------
 
+def remove_files_recursive(directory):
+    # (1) shutil.rmtree(directory)
+    # (2) os.system('rm -fr "%s"' % directory)
+    empty = "/tmp/empty"
+    mkdir_p(empty)
+    os.system('/usr/bin/rsync -a --delete "%s/" "%s/"' % (empty, directory))
+    os.rmdir(empty)
+
+#-----------------------------------------------------------
+
 def setParmString(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
     if cfgIdx not in cfgHash : return False
     volHash[volIdx] = cfgHash[cfgIdx]
@@ -651,16 +661,16 @@ def do_cp_backup(job):
 
 def rotate(job):
 
-    prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+    prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']
 
     # rotate the numbered backups
-    if os.path.isdir(prefix+str(job['keepCount'])):
+    if os.path.isdir(prefix+'.'+str(job['keepCount'])):
         log_debug('removing '+str(job['keepCount']))
-        shutil.rmtree(prefix+str(job['keepCount']))
+        remove_files_recursive(prefix+'.'+str(job['keepCount']))
     rotates=[]
     for i in range(job['keepCount'],0,-1):
-        if os.path.isdir(prefix+str(i-1)):
-            os.rename(prefix+str(i-1),prefix+str(i))
+        if os.path.isdir(prefix+'.'+str(i-1)):
+            os.rename(prefix+'.'+str(i-1),prefix+'.'+str(i))
             rotates.append(str(i-1)+'>>'+str(i))
     log_debug('rotating '+('  '.join(rotates)))
 
@@ -668,10 +678,10 @@ def rotate(job):
 
 def discard(job):
 
-    prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
-    if os.path.isdir(prefix+'0'):
+    prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']
+    if os.path.isdir(prefix+'.0'):
         log_debug('removing 0')
-        shutil.rmtree(prefix+'0')
+        remove_files_recursive(prefix+'.0')
 
 #-----------------------------------------------------------
 
