@@ -56,6 +56,16 @@ jobStatus = enum(
     FAILED     = 'FAILED',
     DISABLED   = 'DISABLED'
 )
+# Server status is shown in status file, reflects what
+# the SERVER is doing, not the state of each backup job.
+serverIs = enum(
+    IDLE       = 'IDLE',
+    PREPARING  = 'PREPARING',
+    BACKING_UP = 'BACKING_UP',
+    ROTATING   = 'ROTATING',
+    CLEANING   = 'CLEANING'
+)
+
 
 #-----------------------------------------------------------
 
@@ -687,16 +697,6 @@ def discard(job):
 
 def do_single_pass():
 
-    # Server status is shown in status file, reflects what
-    # the SERVER is doing, not the state of each backup job.
-    serverIs = enum(
-        IDLE       = 'IDLE',
-        PREPARING  = 'PREPARING',
-        BACKING_UP = 'BACKING_UP',
-        ROTATING   = 'ROTATING',
-        CLEANING   = 'CLEANING'
-    )
-
     #write_status('thinking',0,None)
     jobs = buildJobTable()
     jobs = updateAgesAndSort(jobs)
@@ -847,7 +847,10 @@ def main():
     # IP address, set NTP time, mount external hard disks, etc.  If the
     # helper returns 0, then we're ready to start backing up stuff.
     reportStatusAndQueue('PRESTART', 'not yet started', None, 0, None)
-    if 'helper' in globalCfg and os.path.isfile(globalCfg['helper']):
+    if 'helper' in globalCfg:
+        if not os.path.isfile(globalCfg['helper']):
+            log_info("helper '"+globalCfg['helper']+"' not found")
+            sys.exit(1)
         cmd = [globalCfg['helper']]
         ## TODO: this hangs >> (rc,stdout,stderr) = shell_capture(cmd)
         rc = shell_do(cmd)
