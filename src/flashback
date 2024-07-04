@@ -1,18 +1,18 @@
 #!/usr/bin/python -B
 
-import os
+import argparse
 import datetime
-import subprocess
-import shlex
-import glob
-import operator
-import sys
-from optparse import OptionParser
-import time
-import shutil
-import imp
 import errno
+import glob
+import json
+import operator
+import os
+import shlex
+import shutil
 import signal
+import subprocess
+import sys
+import time
 
 #-----------------------------------------------------------
 #  H E L P E R   C L A S S E S
@@ -26,21 +26,14 @@ def enum(**enums):
 #-----------------------------------------------------------
 
 # globals
-programName = 'flashback'
-libdir = '/var/lib/'+programName
+PROGRAM_NAME = 'flashback'
 maxAge = 10000000
 sleepMin = 10
+
 # globalCfg (global)
+globalCfgFile = None
 globalCfg = {}
-globalCfg['topDir'] = '/flashback'
-globalCfg['logFile'] = '/dev/stdout'
-globalCfg['lastBackupTimestamp'] = datetime.datetime(1970,1,1)
-globalCfg['cycleSec'] = 24*60*60
-globalCfg['keepCount'] = 9
-globalCfg['label'] = 'daily'
-globalCfg['tool'] = 'rsync'
-globalCfg['rsyncOpts'] = ''
-globalCfg['removable'] = False
+
 # plumbing (globals)
 options = ()
 g_logFD = None
@@ -66,113 +59,52 @@ serverIs = enum(
     CLEANING   = 'CLEANING'
 )
 
-
 #-----------------------------------------------------------
 
-def jobfile_to_array(filename):
-    try:
-        log_debug("job file '"+filename+"' found")
-        configFilePtr = open( filename, "r" )
-    except OSError:
-        log_debug("job file '"+filename+"' not found")
-        sys.exit(1)
+# configs
 
-    # MAKE BASIC ENTRIES IN THE 'jobInfo' DICTIONARY FROM /etc/flashback.jobs
+def read_config_file(config_file=None):
+    global globalCfgFile
+    global globalCfg
 
-    sanitizedJobs = []
-    for line in configFilePtr:
-        line = line.partition('#')[0]  # strip comments
-        line = line.rstrip('\r\n')     # strip trailing CR/LF
-        line = line.strip(' ')         # strip leading space
-        log_debug(filename+": "+line)
-        pieces = line.split(' ')
-        rawJob = {}   # raw junk read from config file
-        for piece in pieces:
-            keyValuePair = piece.split('=')
-            if len(keyValuePair) == 2:
-                key = keyValuePair[0]
-                value = keyValuePair[1]
-                rawJob[key] = value
-        if len(rawJob) == 0:
-            continue
-        log_debug('raw job: '+','.join(['%s>%s' % (key, value) for (key, value) in rawJob.items()]) )
+    globalCfgFile = config_file or globalCfgFile 
+    globalCfg = {}
+    if globalCfgFile:
+        f = open(globalCfgFile)
+        globalCfg = json.load(f)
+        f.close()
+    apply_config_defaults()
 
-        sanitizedJob = {}   # sanitized job description
-        # STRING OPTIONS
-        req1 = setParmString(filename,rawJob,'host',sanitizedJob,'host')
-        req2 = setParmString(filename,rawJob,'volume',sanitizedJob,'volume')
-        req3 = setParmString(filename,rawJob,'src',sanitizedJob,'src')
-        setParmString(filename,rawJob,'fqdn',sanitizedJob,'fqdn')
-        setParmString(filename,rawJob,'label',sanitizedJob,'label')
-        setParmString(filename,rawJob,'rsyncOpts',sanitizedJob,'rsyncOpts')
-        setParmString(filename,rawJob,'tool',sanitizedJob,'tool')
-        # NUMBER OPTIONS
-        setParmInt(filename,rawJob,'cycleDay',sanitizedJob,'cycleSec',86400)
-        setParmInt(filename,rawJob,'cycleHour',sanitizedJob,'cycleSec',3600)
-        setParmInt(filename,rawJob,'cycleMin',sanitizedJob,'cycleSec',60)
-        setParmInt(filename,rawJob,'cycleSec',sanitizedJob,'cycleSec')
-        setParmInt(filename,rawJob,'keepCount',sanitizedJob,'keepCount')
-        # BOOLEAN OPTIONS
-        setParmBool(filename,rawJob,'disabled',sanitizedJob,'disabled')
-        setParmBool(filename,rawJob,'removable',sanitizedJob,'removable')
+def apply_config_defaults():
+    defaults = [
+        ('dataDir', '/flashback'),
+        ('libDir', f'/var/lib/{PROGRAM_NAME}'),
+        ('pidDir', f'/var/run'),
+        ('logFile', '/dev/stdout'),
+        ('cycleSec', 24*60*60),
+        ('keepCount', 9),
+        ('label', 'daily'),
+        ('tool', 'rsync'),
+        ('rsyncOpts', ''),
+        ('removable', False),
+    ]
+    for key, value in defaults:
+        if key not in globalCfg['global']:
+            globalCfg['global'][key] = value
 
-        # Specifying an FQDN is optional in the config file.
-        # If none was specified, then set it to the host.
-        if 'fqdn' not in sanitizedJob:
-            sanitizedJob['fqdn'] = sanitizedJob['host']
-        # If host is in FQDN format (with dots), trim them out.
-        if sanitizedJob['host'].find('.') >= 0:
-            sanitizedJob['host'] = sanitizedJob['host'].split('.')[0]
-
-        # IF THE JOB INFO IS COMPLETE, THEN SAVE IT
-        if len(sanitizedJob) > 0:
-            if req1 and req2 and req3:
-                log_debug('sanitizedJob:'+','.join(['%s>%s' % (key, value) for (key, value) in sanitizedJob.items()]) )
-                sanitizedJobs.append(sanitizedJob)
+def config_val(key, paths, default=None):
+    for path in paths:
+        cfg = globalCfg
+        for part in path:
+            if part in cfg:
+                cfg = cfg[part]
             else:
-                log_error('incomplete job '+','.join(['%s>%s' % (key, value) for (key, value) in sanitizedJob.items()]) )
-
-        # IF THE JOB CONTAINS ERRORS, THEN STOP
-        if len(rawJob) > 0:
-            for key in rawJob.keys():
-                log_error("unknown job parameter '"+key+"' in '"+filename+"'")
-            sys.exit(1)
-
-    log_debug('end of '+filename)
-    return sanitizedJobs
-
-#-----------------------------------------------------------
-
-def cfgfile_to_dict(filename):
-    try:
-        log_debug("config file '"+filename+"' found")
-        handle = open( filename, "r" )
-    except OSError:
-        log_debug("config file '"+filename+"' not found")
-        return dict()
-
-    # PARSE CONFIG FILE, BUILD DICTIONARY
-
-    raw = {}
-    for line in handle:
-        line = line.partition('#')[0]  # strip comments
-        line = line.rstrip('\r\n')     # strip trailing CR/LF
-        line = line.strip(' ')         # strip leading space
-        if len(line) == 0:
-            continue
-        if line.find('=') == -1:
-            log_error('syntax error in config file '+filename+' > '+line)
-            sys.exit(1)
-        log_debug(filename+": "+line)
-        (key,eq,value) = line.partition('=')
-        key = key.strip()
-        value = value.strip()
-        raw[key] = value
-        log_debug(filename+" "+key+":"+value)
-
-    handle.close()
-    log_debug('raw '+','.join(['%s:%s' % (key, value) for (key, value) in raw.items()]) )
-    return raw
+                cfg = {}
+        if key in cfg:
+            log_debug(f'found key {key} in {".".join(path)} -> {cfg[key]}')
+            return cfg[key]
+    log_debug(f'using default for key {key} -> {default}')
+    return default
 
 #-----------------------------------------------------------
 
@@ -187,13 +119,9 @@ def log_init(logfile=None):
     else:
         g_logFD = open('/dev/stderr','a')
 
-#-----------------------------------------------------------
-
 def log_debug(string):
     if options.debug:
         log_info(string)
-
-#-----------------------------------------------------------
 
 def log_info(string):
     if options.quiet:
@@ -226,6 +154,10 @@ def format_arglist_into_shellcmd(originalArgs):
 def shell_capture_2(cmdargs, poll_time, poll_func, poll_args, poll_kwargs, stdout=None, stderr=None):
     log_debug('shell_capture_2 arguments >> '+(",".join(cmdargs)))
     log_debug('shell_capture_2 command >> '+format_arglist_into_shellcmd(cmdargs))
+
+    if options.no_run:
+        return 0
+
     p = subprocess.Popen(cmdargs, stdout=stdout, stderr=stderr)
     # wait for process to finish
     while p.poll() is None:
@@ -240,6 +172,10 @@ def shell_capture_2(cmdargs, poll_time, poll_func, poll_args, poll_kwargs, stdou
 def shell_capture(cmdargs):
     log_debug('shell_capture arguments >> '+(",".join(cmdargs)))
     log_debug('shell_capture command >> '+format_arglist_into_shellcmd(cmdargs))
+
+    if options.no_run:
+        return 0, "", ""
+
     p = subprocess.Popen(cmdargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # wait for process to finish, capture stdout and stderr
     stdout, stderr = p.communicate()
@@ -252,6 +188,10 @@ def shell_capture(cmdargs):
 def shell_do(cmdargs):
     log_debug('shell_do arguments >> '+(",".join(cmdargs)))
     log_debug('shell_do command >> '+format_arglist_into_shellcmd(cmdargs))
+
+    if options.no_run:
+        return 0
+
     rc = subprocess.call(cmdargs)
     log_debug("shell_do rc = "+("%d"%rc))
     return rc
@@ -284,7 +224,7 @@ def ping(host):
 def mkdir_p(path):
     try:
         os.makedirs(path)
-    except OSError as exc : # Python >2.5
+    except OSError as exc:
         if exc.errno == errno.EEXIST and os.path.isdir(path):
             pass
         else:
@@ -347,71 +287,85 @@ def setParmBool(cfgFile,cfgHash,cfgIdx,volHash,volIdx):
 #-----------------------------------------------------------
 
 def buildJobTable():
+    """
+    Read the config JSON file and build a list of job dictionaries.
+    Each one has all of the parameters needed to run, as well as current status.
+    """
 
-    jobInfo = jobfile_to_array('/etc/flashback.jobs')
+    job_info_list = []
 
-    # FILL IN THE 'jobInfo' DICTIONARY FROM globalCfg AND JOB-SPECIFIC config FILES
+    cfg_hosts = config_val('hosts', [[]], {})
 
-    for job in jobInfo:
+    for host in cfg_hosts:
+        cfg_volumes = config_val('volumes', [['hosts', host]], {})
+        for volume in cfg_volumes:
+            cfg_jobs = config_val('jobs', [['hosts', host, 'volumes', volume]], {})
+            for job in cfg_jobs:
+                log_debug(f'found host={host}, volume={volume}, job={job}')
+                search_path = [
+                    ['hosts', host, 'volumes', volume, 'jobs', job],
+                    ['hosts', host, 'volumes', volume],
+                    ['hosts', host],
+                    ['defaults'],
+                ]
+                # string options
+                cfg_src = config_val('src', search_path)
+                cfg_fqdn = config_val('fqdn', search_path)
+                cfg_rsync_opts = config_val('rsyncOpts', search_path)
+                cfg_tool = config_val('tool', search_path)
+                # number options
+                cfg_cycleSec = (
+                    (config_val('cycleDay', search_path, 0) * 86400)
+                    or (config_val('cycleHour', search_path, 0) * 3600)
+                    or (config_val('cycleMin', search_path, 0) * 60)
+                    or (config_val('cycleSec', search_path, 0) * 1)
+                )
+                cfg_keepCount = config_val('keepCount', search_path)
+                # boolean options
+                cfg_disabled = config_val('disabled', search_path, False)
+                cfg_removable = config_val('removable', search_path, False)
+                # list options
+                cfg_excludes = config_val('excludes', search_path, [])
 
-        log_debug('job:'+','.join(['%s>%s' % (key, value) for (key, value) in job.items()]) )
+                # Specifying an FQDN is optional in the config file.
+                if not cfg_fqdn:
+                    cfg_fqdn = host
+                # If host is in FQDN format (with dots), trim them out.
+                if host.find('.') >= 0:
+                    host = host.split('.')[0]
 
-        # set some defaults - always
-        job['status'] = jobStatus.UNKNOWN
-        job['lastBackupDurationSec'] = 0
-        # set some defaults - only if not set in main jobs config file (TODO: change this ???)
-        for i in ['label','cycleSec','keepCount','tool','rsyncOpts','removable']:
-            if i not in job : job[i] = globalCfg[i]
-        if 'disabled' not in job : job['disabled'] = False
+                # Get the creation time of the daily.1 directory, if it exists.
+                cfg_datadir = config_val('dataDir', [['global']])
+                recentBackup = cfg_datadir+'/'+host+'/'+volume+'/'+job+'.1'
+                # Note: ctime() does not refer to creation time on *nix systems,
+                # but rather the last time the inode data changed.
+                if os.path.exists(recentBackup):
+                    mtime = os.path.getmtime(recentBackup)
+                    lastBackupTimestamp = datetime.datetime.fromtimestamp(mtime)
+                else:
+                    lastBackupTimestamp = datetime.datetime(1970,1,1)
 
-        # set an index to refer to this entry by
-        index = job['host']+'-'+job['volume']+'-'+job['label']
-        job['index'] = index
+                job_info = {
+                    'index': f"{host}-{volume}-{job}",
+                    'status': jobStatus.UNKNOWN,
+                    'host': host,
+                    'volume': volume,
+                    'label': job,
+                    'src': cfg_src,
+                    'fqdn': cfg_fqdn,
+                    'rsyncOpts': cfg_rsync_opts,
+                    'excludes': cfg_excludes,
+                    'tool': cfg_tool,
+                    'cycleSec': cfg_cycleSec,
+                    'keepCount': cfg_keepCount,
+                    'disabled': cfg_disabled,
+                    'removable': cfg_removable,
+                    'lastBackupTimestamp': lastBackupTimestamp,
+                    'lastBackupDurationSec': 0,
+                }
+                job_info_list.append(job_info)
 
-        # build a list of several machine-specific and job-specific config files to look for
-        configFilenames=[]
-        configFilenames.append(globalCfg['topDir']+'/config') # /backup/config
-        configFilenames.append(globalCfg['topDir']+'/'+job['host']+'/config') # /backup/host/config
-        configFilenames.append(globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/config') # /backup/host/volume/config
-
-        for configFilename in configFilenames:
-            # read the config files if they exist
-            if os.path.isfile(configFilename):
-                log_debug("reading config file '"+configFilename+"'")
-                rawConfig = cfgfile_to_dict(configFilename)
-                # STRING OPTIONS
-                setParmString(configFilename,rawConfig,'src',job,'src')
-                setParmString(configFilename,rawConfig,'label',job,'label')
-                setParmString(configFilename,rawConfig,'rsyncOpts',job,'rsyncOpts')
-                setParmString(configFilename,rawConfig,'tool',job,'tool')
-                # NUMBER OPTIONS
-                setParmInt(configFilename,rawConfig,'cycleDay',job,'cycleSec',86400)
-                setParmInt(configFilename,rawConfig,'cycleHour',job,'cycleSec',3600)
-                setParmInt(configFilename,rawConfig,'cycleMin',job,'cycleSec',60)
-                setParmInt(configFilename,rawConfig,'cycleSec',job,'cycleSec')
-                setParmInt(configFilename,rawConfig,'keepCount',job,'keepCount')
-                # BOOLEAN OPTIONS
-                setParmBool(configFilename,rawConfig,'disabled',job,'disabled')
-
-                if len(rawConfig) > 0:
-                    for key in rawConfig.keys():
-                        log_error("unknown parameter '"+key+"' in '"+configFilename+"'")
-                    sys.exit(1)
-
-            else:
-                log_debug("no config file '"+configFilename+"'")
-
-        # Get the creation time of the daily.1 directory, if it exists.
-        recentBackup = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.1'
-        # Note: ctime() does not refer to creation time on *nix systems,
-        # but rather the last time the inode data changed.
-        if os.path.exists(recentBackup):
-            mtime = os.path.getmtime(recentBackup)
-            job['lastBackupTimestamp'] = datetime.datetime.fromtimestamp(mtime)
-        else:
-            job['lastBackupTimestamp'] = globalCfg['lastBackupTimestamp']
-
-    return jobInfo
+    return job_info_list
 
 #-----------------------------------------------------------
 
@@ -423,6 +377,7 @@ def updateAgesAndSort(jobInfo):
     for job in jobInfo:
         ageDelta = now - job['lastBackupTimestamp']
         job['ageSec'] = ageDelta.seconds + (ageDelta.days * 86400)
+        log_debug(f"job['cycleSec'] = {job['cycleSec']} and job['ageSec'] = {job['ageSec']}")
         job['nextBackupSec'] = job['cycleSec'] - job['ageSec']
         log_debug('index='+job['index']+', nextBackupSec='+str(job['nextBackupSec'])+'sec')
         # force disabled backups to the bottom of the list
@@ -488,59 +443,65 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo):
 
     log_debug('writing status file and queue file')
     suffix = str(os.getpid())
+    cfg_datadir = config_val('dataDir', [['global']])
 
     # CREATE A SMALL STATUS FILE
 
-    statusFileName = libdir+'/status'
-    statusFile = open(statusFileName+suffix,'w')
-    now = datetime.datetime.now()
-    # show time, date and PID - so we know that the info is current
-    statusFile.write('date='+datetime.datetime.strftime(now,'%Y-%m-%d')+'\n')
-    statusFile.write('time='+datetime.datetime.strftime(now,'%H:%M:%S')+'\n')
-    statusFile.write('pid='+str(os.getpid())+'\n')
-    # show what we're doing (a verb)
-    statusFile.write('status='+health+'\n')
-    # show what we're doing it to (an object)
-    if target is None : target=''
-    statusFile.write('target='+target+'\n')
-    # show how long we'll do it (only if we're sleeping)
-    statusFile.write('wait='+str(waitTime)+'\n')
-    # show disk usage info
-    statusFile.write('disk.mntpt='+globalCfg['topDir']+'\n')
+    cfg_libdir = config_val('libDir', [['global']])
+    statusFileName = cfg_libdir+'/status'
     try:
-        (total, used, free) = disk_usage(globalCfg['topDir'])
-        statusFile.write('disk.mounted=true\n')
-        statusFile.write('disk.total.bytes='+str(total)+'\n')
-        statusFile.write('disk.used.bytes='+str(used)+'\n')
-        statusFile.write('disk.free.bytes='+str(free)+'\n')
-        statusFile.write('disk.used.percent='+("%.2f" % (100.0*float(used)/float(total)))+'\n')
-        statusFile.write('disk.free.percent='+("%.2f" % (100.0*float(free)/float(total)))+'\n')
-    except OSError:
-        statusFile.write('disk.mounted=false\n')
-    statusFile.close()
+        statusFile = open(statusFileName+suffix,'w')
+        now = datetime.datetime.now()
+        # show time, date and PID - so we know that the info is current
+        statusFile.write('date='+datetime.datetime.strftime(now,'%Y-%m-%d')+'\n')
+        statusFile.write('time='+datetime.datetime.strftime(now,'%H:%M:%S')+'\n')
+        statusFile.write('pid='+str(os.getpid())+'\n')
+        # show what we're doing (a verb)
+        statusFile.write('status='+health+'\n')
+        # show what we're doing it to (an object)
+        if target is None : target=''
+        statusFile.write('target='+target+'\n')
+        # show how long we'll do it (only if we're sleeping)
+        statusFile.write('wait='+str(waitTime)+'\n')
+        # show disk usage info
+        statusFile.write('disk.mntpt='+cfg_datadir+'\n')
+        try:
+            (total, used, free) = disk_usage(cfg_datadir)
+            statusFile.write('disk.mounted=true\n')
+            statusFile.write('disk.total.bytes='+str(total)+'\n')
+            statusFile.write('disk.used.bytes='+str(used)+'\n')
+            statusFile.write('disk.free.bytes='+str(free)+'\n')
+            statusFile.write('disk.used.percent='+("%.2f" % (100.0*float(used)/float(total)))+'\n')
+            statusFile.write('disk.free.percent='+("%.2f" % (100.0*float(free)/float(total)))+'\n')
+        except OSError:
+            statusFile.write('disk.mounted=false\n')
+        statusFile.close()
 
-    # CREATE A FORMATTED TABLE
+        # CREATE A FORMATTED TABLE
 
-    if (jobInfo == None):
-        table = ['NOT YET STARTED']
-    else:
-        table = formattedTable(jobInfo)
-    date = datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')
+        if (jobInfo == None):
+            table = ['NOT YET STARTED']
+        else:
+            table = formattedTable(jobInfo)
+        date = datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d %H:%M:%S')
 
-    # DUMP THE SORTED LIST INTO THE QUEUE FILE
+        # DUMP THE SORTED LIST INTO THE QUEUE FILE
 
-    queueFileName = libdir+'/queue'
-    queueFile = open(queueFileName+suffix,'w')
-    queueFile.write(date+' : '+activity+'\n')
-    queueFile.write('\n')
-    for line in table:
-        queueFile.write(line+'\n')
-    queueFile.close()
+        queueFileName = cfg_libdir+'/queue'
+        queueFile = open(queueFileName+suffix,'w')
+        queueFile.write(date+' : '+activity+'\n')
+        queueFile.write('\n')
+        for line in table:
+            queueFile.write(line+'\n')
+        queueFile.close()
 
-    # ATOMIC WRITE
+        # ATOMIC WRITE
 
-    os.rename(statusFileName+suffix, statusFileName)
-    os.rename(queueFileName+suffix, queueFileName)
+        os.rename(statusFileName+suffix, statusFileName)
+        os.rename(queueFileName+suffix, queueFileName)
+
+    except FileNotFoundError:
+        return
 
     # SHOW THE SORTED LIST IN THE LOG
 
@@ -554,7 +515,8 @@ def reportStatusAndQueue(health,activity,target,waitTime,jobInfo):
 def do_rsync_backup(job, index, jobs):
 
     # if this is our first time, create a host/volume directory
-    host_vol_dir = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']
+    cfg_datadir = config_val('dataDir', [['global']])
+    host_vol_dir = cfg_datadir+'/'+job['host']+'/'+job['volume']
     mkdir_p(host_vol_dir)
 
     args = [
@@ -570,12 +532,11 @@ def do_rsync_backup(job, index, jobs):
     src = job['src']
     dest = host_vol_dir+'/'+job['label']+'.0'
 
-    # optional - "excludes" file
-    excludes = host_vol_dir+'/excludes'
-    log_debug('testing for ['+excludes+']')
-    if os.path.isfile(excludes):
-        log_debug('"excludes" file found, adding argument')
-        args.append('--exclude-from='+excludes)
+    ex_filename = '/tmp/excludes'
+    if job['excludes']:
+        with open(ex_filename, "w") as ex_fp:
+            ex_fp.write("\n".join(job['excludes']) + "\n")
+        args.append('--exclude-from='+ex_filename)
 
     if len(job['rsyncOpts']) > 0:
         log_debug('"rsyncOpts" found, adding user arguments')
@@ -619,8 +580,13 @@ def do_rsync_backup(job, index, jobs):
     complete = True if rc in (0, 24) else False
     log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
 
+    try:
+        os.unlink(ex_filename)
+    except FileNotFoundError:
+        pass
+
     if complete:
-        prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+        prefix = cfg_datadir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
         if os.path.isdir(prefix+'0'):
             # "touch" the timestamp
             os.utime(prefix+'0',None)
@@ -639,12 +605,14 @@ def do_rsync_backup(job, index, jobs):
 
 def do_cp_backup(job):
 
+    cfg_datadir = config_val('dataDir', [['global']])
+
     # if this is our first time, create a host/volume directory
-    mkdir_p(globalCfg['topDir']+'/'+job['host']+'/'+job['volume'])
+    mkdir_p(cfg_datadir+'/'+job['host']+'/'+job['volume'])
 
     args = ['-alf']
     src = job['src']
-    dest = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
+    dest = cfg_datadir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.0'
 
     cmd = ['/bin/cp'] + args + [src, dest]
     (rc,stdout,stderr) = shell_capture(cmd)
@@ -654,7 +622,7 @@ def do_cp_backup(job):
     log_debug('rc = %d'%rc + ', %s'%('OK' if complete else 'BAD') )
 
     if complete:
-        prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
+        prefix = cfg_datadir+'/'+job['host']+'/'+job['volume']+'/'+job['label']+'.'
         if os.path.isdir(prefix+'0'):
             # "touch" the timestamp
             os.utime(prefix+'0',None)
@@ -671,7 +639,8 @@ def do_cp_backup(job):
 
 def rotate(job):
 
-    prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']
+    cfg_datadir = config_val('dataDir', [['global']])
+    prefix = cfg_datadir+'/'+job['host']+'/'+job['volume']+'/'+job['label']
 
     # rotate the numbered backups
     if os.path.isdir(prefix+'.'+str(job['keepCount'])):
@@ -688,7 +657,8 @@ def rotate(job):
 
 def discard(job):
 
-    prefix = globalCfg['topDir']+'/'+job['host']+'/'+job['volume']+'/'+job['label']
+    cfg_datadir = config_val('dataDir', [['global']])
+    prefix = cfg_datadir+'/'+job['host']+'/'+job['volume']+'/'+job['label']
     if os.path.isdir(prefix+'.0'):
         log_debug('removing 0')
         remove_files_recursive(prefix+'.0')
@@ -775,21 +745,27 @@ def main():
 
     # FIRST -- PARSE COMMAND LINE
     usage = "usage: %prog [options]"
-    parser = OptionParser(usage)
-    parser.add_option("-d", "--debug", action="store_true", dest="debug")
-    parser.add_option("-q", "--quiet", action="store_true", dest="quiet")
+    parser = argparse.ArgumentParser(prog='flashback', description='backup manager')
+    parser.add_argument("-c", "--config", action="store", dest="config_file", default="/etc/flashback.conf")
+    parser.add_argument("-d", "--debug", action="store_true", dest="debug")
+    parser.add_argument("-q", "--quiet", action="store_true", dest="quiet")
+    parser.add_argument("-n", "--no-run", action="store_true", dest="no_run")
     global options
-    (options, args) = parser.parse_args()
-    if len(args) != 0:
-        parser.error("incorrect number of arguments")
+    # argparse.parse_args returns a Namespace object
+    options = parser.parse_args()
 
     # SET UP SERVICES
 
-    log_init(logfile='/var/log/flashback-init.log')
+    log_init(logfile='/tmp/flashback-init.log')
+
+    # READ CONFIGS EARLY - THEY'RE USED EVERYWHERE
+
+    read_config_file(options.config_file)
 
     # LOOK FOR PID FILE, EXIT IF FOUND
 
-    pidfile='/var/run/'+programName+'.pid'
+    cfg_piddir = config_val('pidDir', [['global']])
+    pidfile = f'{cfg_piddir}/{PROGRAM_NAME}.pid'
     try:
         with open(pidfile) as f:
             log_info("pidfile '%s' found... better look for a running process" % pidfile)
@@ -802,43 +778,11 @@ def main():
             else:
                 log_info("pid %d is still running, exiting" % pid)
                 sys.exit()
-    except IOError as e:
-        pass
-    f = open(pidfile,'w');
-    f.write(str(os.getpid())+'\n')
-    f.close()
+    except FileNotFoundError:
+        log_debug("no pid file found, assuming no other runners")
 
-    # READ GLOBAL OPTIONS
-
-    globalConfigFile = '/etc/flashback.conf'
-    if os.path.isfile(globalConfigFile):
-        log_debug("reading global config file '"+globalConfigFile+"'")
-        rawConfig = cfgfile_to_dict(globalConfigFile)
-        # STRING OPTIONS
-        setParmString(globalConfigFile,rawConfig,'topDir',globalCfg,'topDir')
-        setParmString(globalConfigFile,rawConfig,'logFile',globalCfg,'logFile')
-        setParmString(globalConfigFile,rawConfig,'label',globalCfg,'label')
-        setParmString(globalConfigFile,rawConfig,'rsyncOpts',globalCfg,'rsyncOpts')
-        setParmString(globalConfigFile,rawConfig,'tool',globalCfg,'tool')
-        setParmString(globalConfigFile,rawConfig,'helper',globalCfg,'helper')
-        # NUMBER OPTIONS
-        setParmInt(globalConfigFile,rawConfig,'cycleDay',globalCfg,'cycleSec',86400)
-        setParmInt(globalConfigFile,rawConfig,'cycleHour',globalCfg,'cycleSec',3600)
-        setParmInt(globalConfigFile,rawConfig,'cycleMin',globalCfg,'cycleSec',60)
-        setParmInt(globalConfigFile,rawConfig,'cycleSec',globalCfg,'cycleSec')
-        setParmInt(globalConfigFile,rawConfig,'keepCount',globalCfg,'keepCount')
-
-        if len(rawConfig) > 0:
-            for key in rawConfig.keys():
-                log_error("unknown parameter '"+key+"' in '"+globalConfigFile+"'")
-            sys.exit(1)
-    else:
-        log_debug("no config file '"+globalConfigFile+"', using hard-coded globalCfg")
-
-    # At this point, 'globalCfg' contains all config settings that are either
-    # hard-coded at the top of this file, or overridden in /etc/flashback.conf.
-    # They are still called "defaults" because each job can override (some of)
-    # these values.
+    with open(pidfile,'w') as f:
+        f.write(str(os.getpid())+'\n')
 
     # RUN HELPER SCRIPT, IF PRESENT
 
@@ -847,43 +791,50 @@ def main():
     # IP address, set NTP time, mount external hard disks, etc.  If the
     # helper returns 0, then we're ready to start backing up stuff.
     reportStatusAndQueue('PRESTART', 'not yet started', None, 0, None)
-    if 'helper' in globalCfg:
-        if not os.path.isfile(globalCfg['helper']):
-            log_info("helper '"+globalCfg['helper']+"' not found")
+    cfg_helper = config_val('helper', [['global']])
+    if cfg_helper:
+        if not os.path.isfile(cfg_helper):
+            log_info(f"helper '{cfg_helper}' not found")
             sys.exit(1)
-        cmd = [globalCfg['helper']]
+        cmd = [cfg_helper]
         ## TODO: this hangs >> (rc,stdout,stderr) = shell_capture(cmd)
         rc = shell_do(cmd)
         if rc != 0:
-            log_info("helper '"+globalCfg['helper']+"' failed with rc "+str(rc))
+            log_info(f"helper '{cfg_helper}' failed with rc {str(rc)}")
             sys.exit(1)
 
     # At this point, the large disk has been mounted.
 
-    log_info('flashback initialized, further logs will be in '+globalCfg['logFile'])
-    log_init(logfile=globalCfg['logFile'])
+    cfg_logfile = config_val('logFile', [['global']])
+    log_info(f'flashback initialized, further logs will be in {cfg_logfile or "stderr"}')
+    log_init(logfile=cfg_logfile)
     log_info('START')
-    log_debug("globalCfg : "+str(globalCfg)+"")
+    log_debug(f"globalCfg : {json.dumps(globalCfg, default=str)}")
 
     # SANITY CHECK
 
-    if os.path.isdir(globalCfg['topDir']) == False:
-        log_debug("top level backup directory '"+globalCfg['topDir']+"' not found")
+    cfg_datadir = config_val('dataDir', [['global']])
+    if os.path.isdir(cfg_datadir) == False:
+        log_debug(f"top level backup directory {cfg_datadir} not found")
         sys.exit(1)
 
     # SET UP SUPPORT/STATUS DIRECTORY
 
-    mkdir_p(libdir)
+    cfg_libdir = config_val('libDir', [['global']])
+    mkdir_p(cfg_libdir)
 
     # LOOP FOREVER, WORK AND SLEEP
 
     while True:
-        do_single_pass()
+         do_single_pass()
 
     # CLEAN UP
 
     log_info('cleaning up')
-    os.unlink(pidfile)
+    try:
+        os.unlink(pidfile)
+    except FileNotFoundError:
+        pass
 
 #-----------------------------------------------------------
 
