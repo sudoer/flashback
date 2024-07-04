@@ -217,7 +217,9 @@ def sec2string(s):
 #-----------------------------------------------------------
 
 def ping(host):
-    return True if ( shell_do(['ping','-c1',host]) == 0 ) else False
+    result = shell_do(['ping','-c1',host])
+    log_debug(f'pinging {host} -> {result}')
+    return result == 0
 
 #-----------------------------------------------------------
 
@@ -683,7 +685,7 @@ def do_single_pass():
         index = job['index']
 
         # First try to ping the host (full domain name) before trying to back it up.
-        if ( ping(job['fqdn']) == False ):
+        if not ping(job['fqdn']):
             job['status'] = jobStatus.NOT_FOUND
             reportStatusAndQueue(serverIs.PREPARING, "'"+index+"' was not found", index, 0, jobs)
             continue
