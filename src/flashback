@@ -67,7 +67,7 @@ def read_config_file(config_file=None):
     global globalCfgFile
     global globalCfg
 
-    globalCfgFile = config_file or globalCfgFile 
+    globalCfgFile = config_file or globalCfgFile
     globalCfg = {}
     if globalCfgFile:
         f = open(globalCfgFile)
@@ -669,7 +669,10 @@ def discard(job):
 
 def do_single_pass():
 
-    #write_status('thinking',0,None)
+    # Re-read the config file, adapt to any recent changes.
+    read_config_file()
+
+    # Build the jobs table from scratch.
     jobs = buildJobTable()
     jobs = updateAgesAndSort(jobs)
     reportStatusAndQueue(serverIs.PREPARING, 'thinking...', None, 0, jobs)
